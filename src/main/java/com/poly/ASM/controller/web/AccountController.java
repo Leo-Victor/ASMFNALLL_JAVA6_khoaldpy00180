@@ -1,0 +1,151 @@
+package com.poly.ASM.controller.web;
+
+import com.poly.ASM.dto.common.ApiResponse;
+import com.poly.ASM.entity.user.Account;
+import com.poly.ASM.entity.user.Authority;
+import com.poly.ASM.entity.user.Role;
+import com.poly.ASM.service.auth.AuthService;
+import com.poly.ASM.service.user.AccountService;
+import com.poly.ASM.service.user.AuthorityService;
+import com.poly.ASM.service.user.RoleService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.Map;
+import java.util.HashMap;
+
+@RestController
+@RequestMapping("/api/account")
+@RequiredArgsConstructor
+public class AccountController {
+
+    private final AccountService accountService;
+    private final RoleService roleService;
+    private final AuthorityService authorityService;
+    private final AuthService authService;
+    private final PasswordEncoder passwordEncoder;
+
+    @PostMapping("/sign-up")
+    public ResponseEntity<ApiResponse<?>> signUp(@RequestParam("username") String username,
+                                                  @RequestParam("password") String password,
+                                                  @RequestParam("fullname") String fullname,
+                                                  @RequestParam("email") String email) {
+        if (accountService.findByUsername(username).isPresent()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Username đã tồn tại", null));
+        }
+        if (accountService.findByEmail(email).isPresent()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Email đã tồn tại", null));
+        }
+
+        Account account = new Account();
+        account.setUsername(username);
+        account.setPassword(passwordEncoder.encode(password));
+        account.setFullname(fullname);
+        account.setEmail(email);
+        account.setActivated(true);
+        Account saved = accountService.create(account);
+
+        Role role = roleService.findById("USER")
+                .orElseGet(() -> roleService.create(new Role("USER", "Khach hang", null)));
+        Authority authority = new Authority();
+        authority.setAccount(saved);
+        authority.setRole(role);
+        authorityService.create(authority);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Đăng ký thành công, vui lòng đăng nhập", saved));
+    }
+
+    @GetMapping("/profile")
+    public ResponseEntity<ApiResponse<?>> profile() {
+        Account user = authService.getUser();
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
+        }
+        return ResponseEntity.ok(ApiResponse.success("Lấy hồ sơ người dùng thành công", user));
+    }
+
+    @PostMapping("/profile")
+    public ResponseEntity<ApiResponse<?>> editProfile(@RequestParam("fullname") String fullname,
+                                                       @RequestParam("email") String email,
+                                                       @RequestParam(value = "photoFile", required = false) MultipartFile photoFile) {
+        Account user = authService.getUser();
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
+        }
+        Optional<Account> byEmail = accountService.findByEmail(email);
+        if (byEmail.isPresent() && !byEmail.get().getUsername().equals(user.getUsername())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Email đã tồn tại", null));
+        }
+
+        user.setFullname(fullname);
+        user.setEmail(email);
+        String photoName = savePhoto(photoFile);
+        if (photoName != null) {
+            user.setPhoto(photoName);
+        }
+        Account saved = accountService.update(user);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật hồ sơ thành công", saved));
+    }
+
+    private String savePhoto(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return null;
+        }
+        String original = file.getOriginalFilename();
+        String ext = "";
+        if (original != null && original.contains(".")) {
+            ext = original.substring(original.lastIndexOf("."));
+        }
+        String fileName = "avatar-" + UUID.randomUUID() + ext;
+        Path uploadDir = Path.of("src/main/resources/static/images");
+        try {
+            Files.createDirectories(uploadDir);
+            Files.write(uploadDir.resolve(fileName), file.getBytes());
+            return fileName;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<ApiResponse<?>> changePassword(@RequestParam("currentPassword") String currentPassword,
+                                                          @RequestParam("newPassword") String newPassword) {
+        Account user = authService.getUser();
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
+        }
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Mật khẩu hiện tại không đúng", null));
+        }
+        user.setPassword(passwordEncoder.encode(newPassword));
+        accountService.update(user);
+        return ResponseEntity.ok(ApiResponse.success("Đổi mật khẩu thành công", null));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<?>> forgotPassword(@RequestParam("email") String email) {
+        Optional<Account> account = accountService.findByEmail(email);
+        if (account.isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Email không tồn tại", null));
+        }
+        Account user = account.get();
+        user.setPassword(passwordEncoder.encode("123456"));
+        accountService.update(user);
+        Map<String, Object> data = new HashMap<>();
+        data.put("email", email);
+        data.put("newPassword", "123456");
+        return ResponseEntity.ok(ApiResponse.success("Đặt lại mật khẩu thành công", data));
+    }
+}
