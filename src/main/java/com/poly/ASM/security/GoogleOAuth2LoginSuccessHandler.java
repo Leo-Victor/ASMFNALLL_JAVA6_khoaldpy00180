@@ -12,6 +12,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -38,11 +39,12 @@ public class GoogleOAuth2LoginSuccessHandler extends SavedRequestAwareAuthentica
     private final TokenBlacklistService tokenBlacklistService;
     private final JwtCookieService jwtCookieService;
     private final CustomUserDetailsService customUserDetailsService;
+    @Value("${app.frontend-base-url:http://localhost:5173}")
+    private String frontendBaseUrl;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication)
             throws ServletException, IOException {
-        setDefaultTargetUrl("/home/index");
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
         String email = toSafeString(oAuth2User.getAttribute("email"));
         if (email.isBlank()) {
@@ -63,7 +65,11 @@ public class GoogleOAuth2LoginSuccessHandler extends SavedRequestAwareAuthentica
         );
         jwtCookieService.writeAccessCookie(response, accessToken);
         jwtCookieService.writeRefreshCookie(response, refreshToken);
-        super.onAuthenticationSuccess(request, response, authentication);
+        String normalizedBase = frontendBaseUrl == null ? "http://localhost:5173" : frontendBaseUrl.trim();
+        if (normalizedBase.endsWith("/")) {
+            normalizedBase = normalizedBase.substring(0, normalizedBase.length() - 1);
+        }
+        getRedirectStrategy().sendRedirect(request, response, normalizedBase + "/home/index");
     }
 
     private Account createAccountFromGoogleProfile(OAuth2User oAuth2User, String email) {

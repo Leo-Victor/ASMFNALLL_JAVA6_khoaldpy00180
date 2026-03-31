@@ -37,6 +37,7 @@ public interface OrderDetailRepository extends JpaRepository<OrderDetail, Long> 
             from OrderDetail d
             join fetch d.order o
             join fetch d.product p
+            left join fetch p.category c
             where o.status = 'DELIVERED_SUCCESS'
             order by o.id asc, d.id asc
             """)
@@ -47,6 +48,7 @@ public interface OrderDetailRepository extends JpaRepository<OrderDetail, Long> 
             from OrderDetail d
             join fetch d.order o
             join fetch d.product p
+            left join fetch p.category c
             where o.status = 'DELIVERED_SUCCESS'
               and (:fromDate is null or o.createDate >= :fromDate)
               and (:toDate is null or o.createDate <= :toDate)

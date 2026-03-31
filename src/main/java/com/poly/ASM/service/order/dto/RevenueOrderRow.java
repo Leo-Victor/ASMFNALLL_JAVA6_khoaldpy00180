@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -17,6 +18,8 @@ public class RevenueOrderRow {
     private BigDecimal unitPrice;
     private BigDecimal discountAmount;
     private BigDecimal lineTotal;
+    private LocalDateTime orderCreateDate;
+    private String categoryName;
 
     private boolean firstRow;
     private int rowSpan;

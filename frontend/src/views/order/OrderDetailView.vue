@@ -1,9 +1,11 @@
 <script setup>
-import {computed, reactive, ref} from "vue";
+import {computed, onMounted, reactive, ref, watch} from "vue";
+import {useRoute} from "vue-router";
 import {OrderDetailPage} from "@/legacy/pages";
 import {api} from "@/api";
 
 const {orderId, data, payos, error, load, checkPayos, money} = OrderDetailPage.setup();
+const route = useRoute();
 const reviewForms = reactive({});
 const reviewMessage = ref("");
 const reviewedSet = computed(() => new Set(data.value?.reviewedProductIds || []));
@@ -57,6 +59,17 @@ const statusLabel = (status) => {
     };
     return map[status] || status;
 };
+const initOrderByQuery = async () => {
+    const queryId = Number(route.query.id || route.query.orderId || "");
+    if (!Number.isFinite(queryId) || queryId <= 0) {
+        return;
+    }
+    orderId.value = String(queryId);
+    await load();
+};
+onMounted(initOrderByQuery);
+watch(() => route.query.id, initOrderByQuery);
+watch(() => route.query.orderId, initOrderByQuery);
 </script>
 
 <template>

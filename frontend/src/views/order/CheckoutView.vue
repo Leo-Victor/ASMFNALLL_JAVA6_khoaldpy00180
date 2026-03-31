@@ -1,8 +1,10 @@
 <script setup>
 import {onMounted, ref, watch} from "vue";
+import {useRouter} from "vue-router";
 import {CheckoutPage} from "@/legacy/pages";
 
 const {checkout, form, result, error, submit, money} = CheckoutPage.setup();
+const router = useRouter();
 const province = "Gia Lai";
 const wards = [
     "Phường Quy Nhơn",
@@ -18,6 +20,7 @@ if (!form.address) {
 const selectedWard = ref("");
 const mapRef = ref(null);
 const geocodeMessage = ref("");
+const placing = ref(false);
 let leafletMap = null;
 let leafletMarker = null;
 let geocodeTimer = null;
@@ -169,6 +172,21 @@ onMounted(async () => {
         geocodeMessage.value = "Không tải được bản đồ Leaflet.";
     }
 });
+const submitCheckout = async () => {
+    placing.value = true;
+    await submit();
+    placing.value = false;
+    const orderId = result.value?.data?.orderId;
+    const nextAction = result.value?.data?.nextAction;
+    if (!orderId) {
+        return;
+    }
+    if (nextAction === "BANK_TRANSFER" || (form.paymentMethod || "").toUpperCase() === "BANK") {
+        await router.push(`/order/bank-transfer?id=${orderId}`);
+        return;
+    }
+    await router.push(`/order/order-detail?id=${orderId}`);
+};
 </script>
 
 <template>
@@ -204,7 +222,7 @@ onMounted(async () => {
                         </div>
                     </div>
                     
-                    <form class="checkout-section" @submit.prevent="submit">
+                    <form class="checkout-section" @submit.prevent="submitCheckout">
                         <h3 class="checkout-section-title">Địa chỉ giao hàng</h3>
                         
                         <div class="form-group">
@@ -251,7 +269,7 @@ onMounted(async () => {
                             </div>
                         </div>
                         
-                        <button class="btn btn-primary btn--block" type="submit">Đặt hàng ngay</button>
+                        <button class="btn btn-primary btn--block" type="submit" :disabled="placing">{{ placing ? "Đang xử lý..." : "Đặt hàng ngay" }}</button>
                     </form>
                     
                     <div v-if="result" class="status-message status-success">

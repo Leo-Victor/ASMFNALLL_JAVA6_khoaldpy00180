@@ -27,21 +27,26 @@ export const routes = [
     {path: "/home/index", component: HomeView, meta: {title: "home/index", template: "home/index.html"}},
     {path: "/product/list", component: ProductListView, meta: {title: "product/list", template: "product/list.html"}},
     {path: "/product/detail", component: ProductDetailView, meta: {title: "product/detail", template: "product/detail.html"}},
-    {path: "/cart/index", component: CartView, meta: {title: "cart/index", template: "cart/index.html"}},
-    {path: "/order/check-out", component: CheckoutView, meta: {title: "order/check-out", template: "order/check-out.html"}},
-    {path: "/order/bank-transfer", component: BankTransferView, meta: {title: "order/bank-transfer", template: "order/bank-transfer.html"}},
-    {path: "/order/order-list", component: OrderListView, meta: {title: "order/order-list", template: "order/order-list.html"}},
-    {path: "/order/order-detail", component: OrderDetailView, meta: {title: "order/order-detail", template: "order/order-detail.html"}},
-    {path: "/order/my-product-list", component: MyProductListView, meta: {title: "order/my-product-list", template: "order/my-product-list.html"}},
+    {path: "/cart/index", component: CartView, meta: {title: "cart/index", template: "cart/index.html", requiresAuth: true, authFeature: "Giỏ hàng"}},
+    {path: "/order/check-out", component: CheckoutView, meta: {title: "order/check-out", template: "order/check-out.html", requiresAuth: true, authFeature: "Thanh toán đơn hàng"}},
+    {path: "/order/bank-transfer", component: BankTransferView, meta: {title: "order/bank-transfer", template: "order/bank-transfer.html", requiresAuth: true, authFeature: "Thanh toán đơn hàng"}},
+    {path: "/order/order-list", component: OrderListView, meta: {title: "order/order-list", template: "order/order-list.html", requiresAuth: true, authFeature: "Đơn hàng"}},
+    {path: "/order/order-detail", component: OrderDetailView, meta: {title: "order/order-detail", template: "order/order-detail.html", requiresAuth: true, authFeature: "Chi tiết đơn hàng"}},
+    {path: "/order/my-product-list", component: MyProductListView, meta: {title: "order/my-product-list", template: "order/my-product-list.html", requiresAuth: true, authFeature: "Sản phẩm đã mua"}},
     {path: "/account/sign-up", component: SignUpView, meta: {title: "account/sign-up", template: "account/sign-up.html"}},
-    {path: "/account/edit-profile", component: EditProfileView, meta: {title: "account/edit-profile", template: "account/edit-profile.html"}},
-    {path: "/account/change-password", component: ChangePasswordView, meta: {title: "account/change-password", template: "account/change-password.html"}},
+    {path: "/account/edit-profile", component: EditProfileView, meta: {title: "account/edit-profile", template: "account/edit-profile.html", requiresAuth: true, authFeature: "Hồ sơ tài khoản"}},
+    {path: "/account/change-password", component: ChangePasswordView, meta: {title: "account/change-password", template: "account/change-password.html", requiresAuth: true, authFeature: "Đổi mật khẩu"}},
     {path: "/account/forgot-password", component: ForgotPasswordView, meta: {title: "account/forgot-password", template: "account/forgot-password.html"}},
     {path: "/admin/account", component: AdminAccountView, meta: {title: "admin/account", template: "admin/account.html"}},
     {path: "/admin/category", component: AdminCategoryView, meta: {title: "admin/category", template: "admin/category.html"}},
     {path: "/admin/product", component: AdminProductView, meta: {title: "admin/product", template: "admin/product.html"}},
     {path: "/admin/order", component: AdminOrderView, meta: {title: "admin/order", template: "admin/order.html"}},
-    {path: "/admin/revenue", component: AdminRevenueView, meta: {title: "admin/revenue", template: "admin/revenue.html"}},
+    {path: "/admin/revenue", component: AdminRevenueView, meta: {title: "admin/revenue", template: "admin/revenue.html", revenueView: "summary"}},
+    {path: "/admin/revenue/day", component: AdminRevenueView, meta: {title: "admin/revenue/day", template: "admin/revenue.html", revenueView: "day"}},
+    {path: "/admin/revenue/week", component: AdminRevenueView, meta: {title: "admin/revenue/week", template: "admin/revenue.html", revenueView: "week"}},
+    {path: "/admin/revenue/month", component: AdminRevenueView, meta: {title: "admin/revenue/month", template: "admin/revenue.html", revenueView: "month"}},
+    {path: "/admin/revenue/quarter", component: AdminRevenueView, meta: {title: "admin/revenue/quarter", template: "admin/revenue.html", revenueView: "quarter"}},
+    {path: "/admin/revenue/year", component: AdminRevenueView, meta: {title: "admin/revenue/year", template: "admin/revenue.html", revenueView: "year"}},
     {path: "/admin/vip", component: AdminVipView, meta: {title: "admin/vip", template: "admin/vip.html"}},
     {path: "/admin/camera", component: AdminCameraView, meta: {title: "admin/camera", template: "admin/camera.html"}},
     {path: "/", redirect: "/home/index"},
@@ -50,15 +55,40 @@ export const routes = [
 
 const router = createRouter({
     history: createWebHistory(),
-    routes
+    routes,
+    scrollBehavior(to, from, savedPosition) {
+        if (savedPosition) {
+            return savedPosition;
+        }
+        return {top: 0, left: 0};
+    }
 });
 
 router.beforeEach(async (to) => {
-    if (!to.path.startsWith("/admin")) {
+    const requiresAdmin = to.path.startsWith("/admin");
+    const requiresAuth = !!to.meta.requiresAuth || requiresAdmin;
+    if (!requiresAuth) {
         return true;
     }
     try {
         const me = (await api.auth.me()).data || {};
+        if (!me.username) {
+            const feature = to.meta.authFeature || "chức năng này";
+            const accepted = window.confirm(`Bạn cần đăng nhập trước khi thực hiện "${feature}". Nhấn OK để đến trang đăng nhập.`);
+            if (!accepted) {
+                return false;
+            }
+            return {
+                path: "/auth/login",
+                query: {
+                    redirect: to.fullPath,
+                    message: `Bạn cần đăng nhập trước khi thực hiện "${feature}".`
+                }
+            };
+        }
+        if (!requiresAdmin) {
+            return true;
+        }
         const roles = me.roles || [];
         const isAdmin = roles.some((role) => {
             if (typeof role === "string") {
@@ -75,7 +105,18 @@ router.beforeEach(async (to) => {
         }
         return {path: "/auth/login", query: {redirect: to.fullPath}};
     } catch (e) {
-        return {path: "/auth/login", query: {redirect: to.fullPath}};
+        const feature = to.meta.authFeature || "chức năng này";
+        const accepted = window.confirm(`Bạn cần đăng nhập trước khi thực hiện "${feature}". Nhấn OK để đến trang đăng nhập.`);
+        if (!accepted) {
+            return false;
+        }
+        return {
+            path: "/auth/login",
+            query: {
+                redirect: to.fullPath,
+                message: `Bạn cần đăng nhập trước khi thực hiện "${feature}".`
+            }
+        };
     }
 });
 

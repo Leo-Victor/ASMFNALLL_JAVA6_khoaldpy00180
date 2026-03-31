@@ -10,6 +10,36 @@ const toQuery = (params = {}) => {
     return text ? `?${text}` : "";
 };
 
+const authFeatureByPath = [
+    {prefix: "/api/cart", feature: "Giỏ hàng"},
+    {prefix: "/api/order-workflow", feature: "Đơn hàng"},
+    {prefix: "/api/account/profile", feature: "Hồ sơ tài khoản"},
+    {prefix: "/api/account/change-password", feature: "Đổi mật khẩu"},
+    {prefix: "/api/notifications", feature: "Thông báo"},
+    {prefix: "/api/reviews", feature: "Đánh giá sản phẩm"}
+];
+
+const resolveAuthFeature = (path = "") => {
+    const found = authFeatureByPath.find((item) => path.startsWith(item.prefix));
+    return found?.feature || "";
+};
+
+const showAuthRequiredModal = (feature) => {
+    if (!feature || typeof window === "undefined") {
+        return;
+    }
+    const accepted = window.confirm(`Bạn cần đăng nhập trước khi thực hiện "${feature}". Nhấn OK để đến trang đăng nhập.`);
+    if (!accepted) {
+        return;
+    }
+    const redirect = `${window.location.pathname}${window.location.search || ""}`;
+    const query = new URLSearchParams({
+        redirect,
+        message: `Bạn cần đăng nhập trước khi thực hiện "${feature}".`
+    });
+    window.location.href = `/auth/login?${query.toString()}`;
+};
+
 const request = async (path, options = {}) => {
     const response = await fetch(path, {
         credentials: "include",
@@ -26,6 +56,13 @@ const request = async (path, options = {}) => {
         payload = {success: false, message: "Không đọc được phản hồi từ server", data: null};
     }
     if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+            const feature = resolveAuthFeature(path);
+            showAuthRequiredModal(feature);
+            if (feature) {
+                throw new Error(`Bạn cần đăng nhập trước khi thực hiện "${feature}".`);
+            }
+        }
         throw new Error(payload?.message || `HTTP ${response.status}`);
     }
     return payload;

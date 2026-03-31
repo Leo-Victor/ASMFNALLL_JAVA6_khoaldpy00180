@@ -444,65 +444,65 @@ textarea:focus {
 
 .product-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+    gap: 20px;
     justify-content: center;
 }
 
 /* Grid cố định cho các trường hợp cụ thể */
 .product-grid.grid-8,
 .home-section:has(.product-card:nth-last-child(8):first-child) .product-grid {
-    grid-template-columns: repeat(4, minmax(180px, 1fr));
-    max-width: 900px;
+    grid-template-columns: repeat(4, minmax(220px, 1fr));
+    max-width: 1180px;
     margin: 0 auto;
 }
 
 .product-grid.grid-7,
 .home-section:has(.product-card:nth-last-child(7):first-child) .product-grid {
-    grid-template-columns: repeat(4, minmax(180px, 1fr));
-    max-width: 900px;
+    grid-template-columns: repeat(4, minmax(220px, 1fr));
+    max-width: 1180px;
     margin: 0 auto;
 }
 
 .product-grid.grid-6,
 .home-section:has(.product-card:nth-last-child(6):first-child) .product-grid {
-    grid-template-columns: repeat(3, minmax(180px, 1fr));
-    max-width: 700px;
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+    max-width: 900px;
     margin: 0 auto;
 }
 
 .product-grid.grid-5,
 .home-section:has(.product-card:nth-last-child(5):first-child) .product-grid {
-    grid-template-columns: repeat(3, minmax(180px, 1fr));
-    max-width: 700px;
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+    max-width: 900px;
     margin: 0 auto;
 }
 
 .product-grid.grid-4,
 .home-section:has(.product-card:nth-last-child(4):first-child) .product-grid {
-    grid-template-columns: repeat(4, minmax(180px, 1fr));
-    max-width: 900px;
+    grid-template-columns: repeat(4, minmax(220px, 1fr));
+    max-width: 1180px;
     margin: 0 auto;
 }
 
 .product-grid.grid-3,
 .home-section:has(.product-card:nth-last-child(3):first-child) .product-grid {
-    grid-template-columns: repeat(3, minmax(180px, 1fr));
-    max-width: 700px;
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+    max-width: 900px;
     margin: 0 auto;
 }
 
 .product-grid.grid-2,
 .home-section:has(.product-card:nth-last-child(2):first-child) .product-grid {
-    grid-template-columns: repeat(2, minmax(180px, 1fr));
-    max-width: 500px;
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+    max-width: 620px;
     margin: 0 auto;
 }
 
 /* Responsive: tự động điều chỉnh số cột dựa trên viewport */
 @media (min-width: 1400px) {
     .product-grid {
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     }
 }
 
@@ -1227,6 +1227,48 @@ textarea:focus {
     color: #ffffff;
 }
 
+.admin-nav-parent {
+    justify-content: space-between;
+}
+
+.admin-nav-parent.is-open {
+    background: #1a1a1a;
+    color: #ffffff;
+}
+
+.admin-nav-chevron {
+    font-size: 12px;
+    line-height: 1;
+}
+
+.admin-nav-submenu {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: -2px 0 4px;
+    padding: 4px 0 4px 16px;
+}
+
+.admin-nav-sublink {
+    padding: 8px 12px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.admin-nav-sublink:hover {
+    background: #ffffff;
+    color: #1a1a1a;
+}
+
+.admin-nav-sublink.router-link-active {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
 /* Admin Layout - 2 columns (sidebar + content) */
 .admin-layout {
     padding: 32px 0;
@@ -1561,6 +1603,10 @@ textarea:focus {
 /* ========== HOME PAGE ========== */
 .home-page {
     padding: 0 0 48px;
+}
+
+.home-page > .container {
+    max-width: 1480px;
 }
 
 /* Hero Carousel */
@@ -2097,6 +2143,111 @@ textarea:focus {
     font-size: 24px;
 }
 
+.transfer-sheet {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.transfer-sheet-top {
+    padding: 16px 20px;
+    font-size: 20px;
+    border-bottom: 1px solid #eef2f7;
+}
+
+.transfer-sheet-body {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 20px;
+    padding: 20px;
+}
+
+.transfer-qr-panel {
+    border: 1px solid #dbe3f0;
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+    background: #f8fbff;
+}
+
+.transfer-qr-head {
+    font-weight: 800;
+    color: #1f4fa3;
+    margin-bottom: 10px;
+}
+
+.transfer-qr-image {
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto;
+    display: block;
+    border: 3px solid #93c5fd;
+    border-radius: 8px;
+}
+
+.transfer-qr-bank {
+    margin-top: 10px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.transfer-info-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.transfer-info-row {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 10px;
+    align-items: center;
+}
+
+.transfer-info-label {
+    color: #4b5563;
+    font-weight: 500;
+    font-size: 22px;
+}
+
+.transfer-info-value {
+    color: #0f172a;
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.transfer-copy-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.transfer-copy-btn {
+    min-width: 110px;
+    font-size: 17px;
+    white-space: nowrap;
+}
+
+.transfer-note {
+    margin-top: 8px;
+    padding: 14px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    font-size: 29px;
+    line-height: 1.45;
+}
+
+.transfer-actions {
+    padding: 0 20px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
 @media (max-width: 1199px) {
     .checkout-layout {
         grid-template-columns: 1fr;
@@ -2104,6 +2255,26 @@ textarea:focus {
     
     .checkout-sidebar {
         position: static;
+    }
+
+    .transfer-sheet-body {
+        grid-template-columns: 1fr;
+    }
+
+    .transfer-info-row {
+        grid-template-columns: 1fr;
+    }
+
+    .transfer-info-label {
+        font-size: 15px;
+    }
+
+    .transfer-info-value {
+        font-size: 20px;
+    }
+
+    .transfer-note {
+        font-size: 15px;
     }
 }
 
@@ -2135,6 +2306,12 @@ textarea:focus {
     border-radius: 8px !important;
 }
 
+.revenue-subtitle {
+    margin: 0 0 12px;
+    font-size: 18px;
+    font-weight: 600;
+}
+
 .revenue-filter {
     padding: 24px;
     margin-bottom: 24px;
@@ -2157,6 +2334,78 @@ textarea:focus {
     grid-column: 1 / -1;
     justify-content: center;
     margin-top: 8px;
+}
+
+.revenue-period-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.revenue-chart-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.revenue-chart-card {
+    padding: 16px;
+}
+
+.revenue-chart-card h4 {
+    margin: 0 0 12px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.revenue-pie-wrap {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.revenue-pie-chart {
+    width: 220px;
+    height: 220px;
+    flex: 0 0 220px;
+}
+
+.revenue-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.revenue-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.revenue-legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.revenue-line-wrap {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.revenue-line-chart {
+    width: 100%;
+    min-width: 620px;
+    height: 280px;
+}
+
+.revenue-line-label {
+    fill: #6b7280;
+    font-size: 11px;
 }
 
 .revenue-table {
@@ -2285,6 +2534,14 @@ textarea:focus {
 }
 
 @media (max-width: 991px) {
+    .revenue-chart-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .revenue-pie-wrap {
+        flex-direction: column;
+    }
+    
     .camera-grid {
         grid-template-columns: 1fr;
     }

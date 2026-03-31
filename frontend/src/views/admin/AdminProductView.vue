@@ -4,7 +4,6 @@ import {AdminProductPage} from "@/legacy/pages";
 import AdminNav from "@/components/AdminNav.vue";
 
 const {state, form, editing, message, load, edit, reset, save, remove, next, prev, money} = AdminProductPage.setup();
-const token = ref(localStorage.getItem("admin_api_access_token") || "");
 const modalOpen = ref(false);
 const errorMessage = ref("");
 const successMessage = ref("");
@@ -72,10 +71,6 @@ const submitForm = async () => {
 const removeProduct = async (product) => {
     await remove(product.id);
 };
-const saveToken = () => {
-    localStorage.setItem("admin_api_access_token", token.value || "");
-    successMessage.value = "Đã lưu token";
-};
 const scrollToResults = async () => {
     await nextTick();
     listRef.value?.scrollIntoView({behavior: "smooth", block: "start"});
@@ -103,7 +98,7 @@ const clearFilters = async () => {
 
 <template>
     <main class="container admin-product-page">
-        <h3 class="page-title">Quản lý sản phẩm (VueJS + REST API)</h3>
+        <h3 class="page-title">Quản lý sản phẩm</h3>
         <div class="admin-product-shell">
             <div class="admin-product-menu">
                 <AdminNav/>
@@ -150,13 +145,6 @@ const clearFilters = async () => {
             </div>
             <div class="admin-product-filter">
                 <form class="card admin-product-filter-form" @submit.prevent="applyFilters">
-                    <div class="form-group">
-                        <label>Access token (ADMIN)</label>
-                        <input type="text" v-model.trim="token" placeholder="Bearer token">
-                    </div>
-                    <div class="table-actions">
-                        <button class="btn btn-primary" type="button" @click="saveToken">Lưu token</button>
-                    </div>
                     <div class="form-group">
                         <label>Từ khoá</label>
                         <input type="text" v-model.trim="filters.keyword" placeholder="Tên sản phẩm">

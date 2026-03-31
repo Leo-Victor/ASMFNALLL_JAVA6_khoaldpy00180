@@ -7,6 +7,9 @@ import {api} from "@/api";
 const {productId, data, error, load, money} = ProductDetailPage.setup();
 const route = useRoute();
 const loadByQuery = async () => {
+    if (typeof window !== "undefined") {
+        window.scrollTo({top: 0, left: 0, behavior: "auto"});
+    }
     const queryId = Number(route.query.id || route.query.productId || productId.value);
     if (Number.isFinite(queryId) && queryId > 0) {
         productId.value = queryId;

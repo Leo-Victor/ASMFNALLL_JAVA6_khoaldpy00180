@@ -166,7 +166,7 @@ public class OrderController {
                     cancelUrl
             );
             Map<String, Object> data = new HashMap<>();
-            data.put("order", order);
+            data.put("order", toOrderData(order));
             data.put("totalPrice", total);
             data.put("checkoutUrl", response.getCheckoutUrl());
             data.put("qrImageSrc", buildQrImageSrc(response.getQrCode()));
@@ -339,8 +339,8 @@ public class OrderController {
         }
         Order order = orderOpt.get();
         Map<String, Object> data = new HashMap<>();
-        data.put("order", order);
-        data.put("details", orderDetailService.findByOrderId(id));
+        data.put("order", toOrderData(order));
+        data.put("details", toOrderDetailData(orderDetailService.findByOrderId(id)));
         data.put("reviewable", isDeliveredStatus(order.getStatus()));
         data.put("reviewedProductIds", productReviewService.findReviewedProductIds(user.getUsername(), id));
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết đơn hàng thành công", data));
@@ -395,6 +395,51 @@ public class OrderController {
         }
         String encoded = URLEncoder.encode(qrCode, StandardCharsets.UTF_8);
         return "https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=" + encoded;
+    }
+
+    private Map<String, Object> toOrderData(Order order) {
+        Map<String, Object> orderData = new HashMap<>();
+        if (order == null) {
+            return orderData;
+        }
+        orderData.put("id", order.getId());
+        orderData.put("address", order.getAddress());
+        orderData.put("status", order.getStatus());
+        orderData.put("createDate", order.getCreateDate());
+        return orderData;
+    }
+
+    private List<Map<String, Object>> toOrderDetailData(List<OrderDetail> details) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        if (details == null) {
+            return result;
+        }
+        for (OrderDetail detail : details) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("id", detail.getId());
+            row.put("price", detail.getPrice());
+            row.put("quantity", detail.getQuantity());
+            row.put("sizeId", detail.getSizeId());
+            row.put("sizeName", detail.getSizeName());
+            Product product = detail.getProduct();
+            if (product != null) {
+                Map<String, Object> productData = new HashMap<>();
+                productData.put("id", product.getId());
+                productData.put("name", product.getName());
+                productData.put("image", product.getImage());
+                productData.put("price", product.getPrice());
+                productData.put("discount", product.getDiscount());
+                row.put("product", productData);
+                row.put("productId", product.getId());
+                row.put("productName", product.getName());
+            } else {
+                row.put("product", null);
+                row.put("productId", null);
+                row.put("productName", "");
+            }
+            result.add(row);
+        }
+        return result;
     }
 
     private void applyPaymentStatus(Long orderId, PaymentLinkStatus status) {

@@ -83,6 +83,8 @@ public class ReportServiceImpl implements ReportService {
                     unitPrice,
                     discountAmount,
                     lineTotal,
+                    d.getOrder() != null ? d.getOrder().getCreateDate() : null,
+                    d.getProduct() != null && d.getProduct().getCategory() != null ? d.getProduct().getCategory().getName() : "",
                     firstRow,
                     counts.getOrDefault(orderId, 1),
                     orderIndexMap.getOrDefault(orderId, 0)
