@@ -13,6 +13,8 @@ public interface ProductReviewRepository extends JpaRepository<ProductReview, Lo
 
     List<ProductReview> findByAccountUsernameAndOrderId(String username, Long orderId);
 
+    void deleteByProductId(Integer productId);
+
     @Query("""
             select r
             from ProductReview r

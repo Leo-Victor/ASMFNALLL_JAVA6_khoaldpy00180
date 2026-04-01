@@ -17,7 +17,7 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     public List<Account> findAll() {
-        return accountRepository.findAll();
+        return accountRepository.findByIsDeleteFalse();
     }
 
     @Override
@@ -42,6 +42,9 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     public void deleteByUsername(String username) {
-        accountRepository.deleteById(username);
+        accountRepository.findById(username).ifPresent(account -> {
+            account.setIsDelete(true);
+            accountRepository.save(account);
+        });
     }
 }

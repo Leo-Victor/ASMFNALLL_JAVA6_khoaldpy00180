@@ -37,5 +37,6 @@ public interface CartItemRepository extends JpaRepository<CartItemEntity, Long> 
     List<Integer> findDistinctProductIdsByUsername(@Param("username") String username);
 
     void deleteByAccountUsername(String username);
-}
 
+    void deleteByProductId(Integer productId);
+}

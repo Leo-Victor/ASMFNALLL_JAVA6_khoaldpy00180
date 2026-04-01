@@ -87,7 +87,7 @@ public class AccountAController {
     @GetMapping("/{username}")
     public ResponseEntity<ApiResponse<?>> edit(@PathVariable("username") String username) {
         Optional<Account> account = accountService.findByUsername(username);
-        if (account.isEmpty()) {
+        if (account.isEmpty() || Boolean.TRUE.equals(account.get().getIsDelete())) {
             throw new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản");
         }
 
@@ -113,6 +113,9 @@ public class AccountAController {
                                                   @RequestParam("roleId") String roleId) {
         Account account = accountService.findByUsername(username)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản"));
+        if (Boolean.TRUE.equals(account.getIsDelete())) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản");
+        }
         if (password != null && !password.isBlank()) {
             account.setPassword(passwordEncoder.encode(password));
         }
@@ -137,7 +140,11 @@ public class AccountAController {
 
     @DeleteMapping("/{username}")
     public ResponseEntity<ApiResponse<?>> delete(@PathVariable("username") String username) {
-        authorityService.deleteByAccountUsername(username);
+        Account account = accountService.findByUsername(username)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản"));
+        if (Boolean.TRUE.equals(account.getIsDelete())) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản");
+        }
         accountService.deleteByUsername(username);
         return ResponseEntity.ok(ApiResponse.success("Xóa tài khoản thành công", null));
     }

@@ -15,6 +15,8 @@ public interface OrderDetailRepository extends JpaRepository<OrderDetail, Long> 
 
     void deleteByOrderId(Long orderId);
 
+    boolean existsByProductId(Integer productId);
+
     @Query("select d from OrderDetail d join fetch d.product where d.order.account.username = ?1")
     List<OrderDetail> findByOrderAccountUsername(String username);
 

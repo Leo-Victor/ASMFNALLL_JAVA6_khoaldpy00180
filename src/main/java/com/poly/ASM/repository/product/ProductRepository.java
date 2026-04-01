@@ -15,33 +15,34 @@ import java.util.Optional;
 public interface ProductRepository extends JpaRepository<Product, Integer> {
 
     @EntityGraph(attributePaths = "category")
-    @Query("select p from Product p")
+    @Query("select p from Product p where p.isDelete = false")
     List<Product> findAllWithCategory();
 
     @EntityGraph(attributePaths = "category")
-    @Query("select p from Product p where p.id = :id")
+    @Query("select p from Product p where p.id = :id and p.isDelete = false")
     Optional<Product> findByIdWithCategory(@Param("id") Integer id);
 
     @EntityGraph(attributePaths = "category")
-    Page<Product> findBy(Pageable pageable);
+    Page<Product> findByIsDeleteFalse(Pageable pageable);
 
     @EntityGraph(attributePaths = "category")
-    List<Product> findTop8ByOrderByCreateDateDesc();
+    List<Product> findTop8ByIsDeleteFalseOrderByCreateDateDesc();
 
     @EntityGraph(attributePaths = "category")
-    List<Product> findTop8ByDiscountGreaterThanOrderByDiscountDesc(BigDecimal discount);
+    List<Product> findTop8ByDiscountGreaterThanAndIsDeleteFalseOrderByDiscountDesc(BigDecimal discount);
 
     @EntityGraph(attributePaths = "category")
-    List<Product> findByCategoryId(String categoryId);
+    List<Product> findByCategoryIdAndIsDeleteFalse(String categoryId);
 
     @EntityGraph(attributePaths = "category")
-    List<Product> findTop4ByCategoryIdAndIdNot(String categoryId, Integer id);
+    List<Product> findTop4ByCategoryIdAndIdNotAndIsDeleteFalse(String categoryId, Integer id);
 
     @Query("""
             select p
             from Product p
             join p.orderDetails od
             join fetch p.category c
+            where p.isDelete = false
             group by p, c.id, c.name
             order by sum(od.quantity) desc
             """)
@@ -53,6 +54,7 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
             join fetch p.category c
             where (:keyword is null or :keyword = '' or lower(p.name) like lower(concat('%', :keyword, '%'))
                or lower(c.name) like lower(concat('%', :keyword, '%')))
+              and p.isDelete = false
               and (:categoryId is null or :categoryId = '' or c.id = :categoryId)
               and (:minPrice is null or p.price >= :minPrice)
               and (:maxPrice is null or p.price <= :maxPrice)
@@ -68,6 +70,7 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
             join fetch p.category c
             where (:keyword is null or :keyword = '' or lower(p.name) like lower(concat('%', :keyword, '%'))
                or lower(c.name) like lower(concat('%', :keyword, '%')))
+              and p.isDelete = false
               and (:categoryId is null or :categoryId = '' or c.id = :categoryId)
               and (:minPrice is null or p.price >= :minPrice)
               and (:maxPrice is null or p.price <= :maxPrice)
@@ -77,6 +80,7 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
             join p.category c
             where (:keyword is null or :keyword = '' or lower(p.name) like lower(concat('%', :keyword, '%'))
                or lower(c.name) like lower(concat('%', :keyword, '%')))
+              and p.isDelete = false
               and (:categoryId is null or :categoryId = '' or c.id = :categoryId)
               and (:minPrice is null or p.price >= :minPrice)
               and (:maxPrice is null or p.price <= :maxPrice)
@@ -93,6 +97,7 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
             join p.category c
             where (:keyword is null or :keyword = '' or lower(p.name) like lower(concat('%', :keyword, '%'))
                or lower(c.name) like lower(concat('%', :keyword, '%')))
+              and p.isDelete = false
               and (:categoryId is null or :categoryId = '' or c.id = :categoryId)
               and (:minPrice is null or p.price >= :minPrice)
               and (:maxPrice is null or p.price <= :maxPrice)
@@ -109,6 +114,7 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
             join p.category c
             where (:keyword is null or :keyword = '' or lower(p.name) like lower(concat('%', :keyword, '%'))
                or lower(c.name) like lower(concat('%', :keyword, '%')))
+              and p.isDelete = false
               and (:categoryId is null or :categoryId = '' or c.id = :categoryId)
               and (:minPrice is null or p.price >= :minPrice)
               and (:maxPrice is null or p.price <= :maxPrice)

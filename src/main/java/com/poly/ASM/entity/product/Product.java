@@ -60,6 +60,9 @@ public class Product extends BaseEntity {
     @Column(length = 2000)
     private String description;
 
+    @Column(name = "is_delete", nullable = false)
+    private Boolean isDelete;
+
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @ManyToOne(fetch = FetchType.LAZY)
@@ -86,6 +89,9 @@ public class Product extends BaseEntity {
         }
         if (available == null) {
             available = true;
+        }
+        if (isDelete == null) {
+            isDelete = false;
         }
     }
 }

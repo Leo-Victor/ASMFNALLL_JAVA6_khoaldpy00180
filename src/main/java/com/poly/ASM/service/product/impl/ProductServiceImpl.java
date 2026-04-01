@@ -2,6 +2,7 @@ package com.poly.ASM.service.product.impl;
 
 import com.poly.ASM.entity.product.Product;
 import com.poly.ASM.entity.product.ProductSize;
+import com.poly.ASM.exception.ApiException;
 import com.poly.ASM.repository.product.ProductRepository;
 import com.poly.ASM.service.product.ProductService;
 import com.poly.ASM.service.product.ProductSizeService;
@@ -9,7 +10,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -32,7 +35,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public Page<Product> findAllPage(int page, int size) {
-        Page<Product> products = productRepository.findBy(PageRequest.of(page, size, Sort.by("id").descending()));
+        Page<Product> products = productRepository.findByIsDeleteFalse(PageRequest.of(page, size, Sort.by("id").descending()));
         attachSizes(products.getContent());
         return products;
     }
@@ -51,14 +54,14 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<Product> findTop8ByOrderByCreateDateDesc() {
-        List<Product> products = productRepository.findTop8ByOrderByCreateDateDesc();
+        List<Product> products = productRepository.findTop8ByIsDeleteFalseOrderByCreateDateDesc();
         attachSizes(products);
         return products;
     }
 
     @Override
     public List<Product> findTop8ByDiscountGreaterThanOrderByDiscountDesc(double discount) {
-        List<Product> products = productRepository.findTop8ByDiscountGreaterThanOrderByDiscountDesc(BigDecimal.valueOf(discount));
+        List<Product> products = productRepository.findTop8ByDiscountGreaterThanAndIsDeleteFalseOrderByDiscountDesc(BigDecimal.valueOf(discount));
         attachSizes(products);
         return products;
     }
@@ -72,21 +75,21 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<Product> findByCategoryId(String categoryId) {
-        List<Product> products = productRepository.findByCategoryId(categoryId);
+        List<Product> products = productRepository.findByCategoryIdAndIsDeleteFalse(categoryId);
         attachSizes(products);
         return products;
     }
 
     @Override
     public List<Product> findTop4ByCategoryIdAndIdNot(String categoryId, Integer id) {
-        List<Product> products = productRepository.findTop4ByCategoryIdAndIdNot(categoryId, id);
+        List<Product> products = productRepository.findTop4ByCategoryIdAndIdNotAndIsDeleteFalse(categoryId, id);
         attachSizes(products);
         return products;
     }
 
     @Override
     public List<Product> findAllWithSizes() {
-        List<Product> products = productRepository.findAll();
+        List<Product> products = productRepository.findAllWithCategory();
         attachSizes(products);
         return products;
     }
@@ -145,8 +148,12 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional
     public void deleteById(Integer id) {
-        productRepository.deleteById(id);
+        Product product = productRepository.findByIdWithCategory(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy sản phẩm"));
+        product.setIsDelete(true);
+        productRepository.save(product);
     }
 
     private void attachSizes(Product product) {

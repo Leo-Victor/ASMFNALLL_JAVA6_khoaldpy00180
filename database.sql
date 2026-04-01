@@ -267,6 +267,112 @@ SELECT
 FROM sys.foreign_keys fk
 WHERE fk.name = 'FK_products_categories';
 
+USE ASM_Java5;
+GO
+
+/* ===== ACCOUNTS ===== */
+IF EXISTS (
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.accounts')
+      AND name = 'isDelete'
+)
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.accounts')
+      AND name = 'is_delete'
+)
+BEGIN
+    EXEC sp_rename 'dbo.accounts.isDelete', 'is_delete', 'COLUMN';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.accounts')
+      AND name = 'is_delete'
+)
+BEGIN
+    ALTER TABLE dbo.accounts ADD is_delete BIT NULL;
+END
+GO
+
+UPDATE dbo.accounts
+SET is_delete = 0
+WHERE is_delete IS NULL;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.default_constraints dc
+    JOIN sys.columns c
+      ON c.default_object_id = dc.object_id
+    WHERE dc.parent_object_id = OBJECT_ID('dbo.accounts')
+      AND c.name = 'is_delete'
+)
+BEGIN
+    ALTER TABLE dbo.accounts
+    ADD CONSTRAINT DF_accounts_is_delete DEFAULT (0) FOR is_delete;
+END
+GO
+
+ALTER TABLE dbo.accounts
+ALTER COLUMN is_delete BIT NOT NULL;
+GO
+
+/* ===== PRODUCTS ===== */
+IF EXISTS (
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.products')
+      AND name = 'isDelete'
+)
+AND NOT EXISTS (
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.products')
+      AND name = 'is_delete'
+)
+BEGIN
+    EXEC sp_rename 'dbo.products.isDelete', 'is_delete', 'COLUMN';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.products')
+      AND name = 'is_delete'
+)
+BEGIN
+    ALTER TABLE dbo.products ADD is_delete BIT NULL;
+END
+GO
+
+UPDATE dbo.products
+SET is_delete = 0
+WHERE is_delete IS NULL;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.default_constraints dc
+    JOIN sys.columns c
+      ON c.default_object_id = dc.object_id
+    WHERE dc.parent_object_id = OBJECT_ID('dbo.products')
+      AND c.name = 'is_delete'
+)
+BEGIN
+    ALTER TABLE dbo.products
+    ADD CONSTRAINT DF_products_is_delete DEFAULT (0) FOR is_delete;
+END
+GO
+
+ALTER TABLE dbo.products
+ALTER COLUMN is_delete BIT NOT NULL;
+GO
 
 
 

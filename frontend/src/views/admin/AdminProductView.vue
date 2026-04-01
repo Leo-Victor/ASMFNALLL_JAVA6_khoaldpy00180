@@ -69,7 +69,20 @@ const submitForm = async () => {
     }
 };
 const removeProduct = async (product) => {
-    await remove(product.id);
+    const accepted = typeof window !== "undefined"
+        ? window.confirm(`Bạn có chắc chắn muốn xoá sản phẩm "${product.name}" không?`)
+        : true;
+    if (!accepted) {
+        return;
+    }
+    try {
+        await remove(product.id);
+        successMessage.value = "Xoá sản phẩm thành công";
+        errorMessage.value = "";
+    } catch (e) {
+        successMessage.value = "";
+        errorMessage.value = e.message || "Xoá sản phẩm thất bại";
+    }
 };
 const scrollToResults = async () => {
     await nextTick();

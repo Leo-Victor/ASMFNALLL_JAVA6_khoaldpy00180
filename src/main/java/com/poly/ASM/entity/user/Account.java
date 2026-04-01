@@ -47,6 +47,9 @@ public class Account {
     @Column(nullable = false)
     private Boolean activated;
 
+    @Column(name = "is_delete", nullable = false)
+    private Boolean isDelete;
+
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @JsonIgnore
@@ -65,6 +68,9 @@ public class Account {
     private void applyDefaults() {
         if (activated == null) {
             activated = true;
+        }
+        if (isDelete == null) {
+            isDelete = false;
         }
     }
 }
