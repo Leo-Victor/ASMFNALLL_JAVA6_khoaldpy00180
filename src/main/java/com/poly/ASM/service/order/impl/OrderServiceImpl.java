@@ -52,10 +52,10 @@ public class OrderServiceImpl implements OrderService {
         String previousStatus = existingOpt.map(Order::getStatus).orElse(null);
         String nextStatus = order.getStatus();
         if (nextStatus != null && !nextStatus.equals(previousStatus)) {
-            if (isPlacedStatus(nextStatus) && !isPlacedStatus(previousStatus)) {
+            if (isDeliveredStatus(nextStatus) && !isDeliveredStatus(previousStatus)) {
                 adjustInventory(order.getId(), -1);
             }
-            if (isFailedStatus(nextStatus) && !isFailedStatus(previousStatus)) {
+            if (!isDeliveredStatus(nextStatus) && isDeliveredStatus(previousStatus)) {
                 adjustInventory(order.getId(), 1);
             }
         }
@@ -67,18 +67,11 @@ public class OrderServiceImpl implements OrderService {
         orderRepository.deleteById(id);
     }
 
-    private boolean isPlacedStatus(String status) {
+    private boolean isDeliveredStatus(String status) {
         if (status == null) {
             return false;
         }
-        return "PLACED_UNPAID".equals(status) || "PLACED_PAID".equals(status);
-    }
-
-    private boolean isFailedStatus(String status) {
-        if (status == null) {
-            return false;
-        }
-        return "DELIVERY_FAILED".equals(status) || "CANCEL".equals(status);
+        return "DELIVERED_SUCCESS".equals(status) || "DONE".equals(status);
     }
 
     private void adjustInventory(Long orderId, int direction) {

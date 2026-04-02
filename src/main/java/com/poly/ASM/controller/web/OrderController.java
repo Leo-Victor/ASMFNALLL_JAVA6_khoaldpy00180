@@ -126,9 +126,6 @@ public class OrderController {
             detail.setSizeId(item.getSizeId());
             detail.setSizeName(item.getSizeName());
             orderDetailService.create(detail);
-            ProductSize ps = productSize.get();
-            ps.setQuantity(ps.getQuantity() - item.getQuantity());
-            productSizeService.save(ps);
         }
         cartService.clearCart();
         Map<String, Object> data = new HashMap<>();

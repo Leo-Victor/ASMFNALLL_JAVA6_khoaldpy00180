@@ -24,20 +24,53 @@ const resolveAuthFeature = (path = "") => {
     return found?.feature || "";
 };
 
-const showAuthRequiredModal = (feature) => {
+const openAuthRequiredModal = (feature) => {
+    if (!feature || typeof window === "undefined" || typeof document === "undefined") {
+        return Promise.resolve(false);
+    }
+    return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.className = "auth-required-modal-overlay";
+        overlay.innerHTML = `
+            <div class="auth-required-modal">
+                <h3>Thông báo đăng nhập</h3>
+                <p>Bạn cần đăng nhập trước khi thực hiện "${feature}".</p>
+                <div class="auth-required-modal-actions">
+                    <button type="button" class="btn btn-outline-primary" data-action="cancel">Huỷ</button>
+                    <button type="button" class="btn btn-primary" data-action="ok">Đăng nhập</button>
+                </div>
+            </div>
+        `;
+        const cleanup = (accepted) => {
+            overlay.remove();
+            resolve(accepted);
+        };
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) {
+                cleanup(false);
+            }
+        });
+        overlay.querySelector("[data-action='cancel']")?.addEventListener("click", () => cleanup(false));
+        overlay.querySelector("[data-action='ok']")?.addEventListener("click", () => cleanup(true));
+        document.body.appendChild(overlay);
+    });
+};
+
+export const redirectToLoginByFeature = async (feature, redirectPath = "") => {
     if (!feature || typeof window === "undefined") {
-        return;
+        return false;
     }
-    const accepted = window.confirm(`Bạn cần đăng nhập trước khi thực hiện "${feature}". Nhấn OK để đến trang đăng nhập.`);
+    const accepted = await openAuthRequiredModal(feature);
     if (!accepted) {
-        return;
+        return false;
     }
-    const redirect = `${window.location.pathname}${window.location.search || ""}`;
+    const redirect = redirectPath || `${window.location.pathname}${window.location.search || ""}`;
     const query = new URLSearchParams({
         redirect,
         message: `Bạn cần đăng nhập trước khi thực hiện "${feature}".`
     });
     window.location.href = `/auth/login?${query.toString()}`;
+    return true;
 };
 
 const request = async (path, options = {}) => {
@@ -58,7 +91,7 @@ const request = async (path, options = {}) => {
     if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
             const feature = resolveAuthFeature(path);
-            showAuthRequiredModal(feature);
+            await redirectToLoginByFeature(feature);
             if (feature) {
                 throw new Error(`Bạn cần đăng nhập trước khi thực hiện "${feature}".`);
             }
@@ -108,6 +141,11 @@ export const api = {
         updateProfile: (data) => form("/api/account/profile", "POST", data),
         changePassword: (currentPassword, newPassword) => form("/api/account/change-password", "POST", {currentPassword, newPassword}),
         forgotPassword: (email) => form("/api/account/forgot-password", "POST", {email})
+    },
+    notifications: {
+        latest: (limit = 10) => request(`/api/notifications/latest${toQuery({limit})}`),
+        unreadCount: () => request("/api/notifications/unread-count"),
+        read: (id) => request(`/api/notifications/read/${id}`)
     },
     orderWorkflow: {
         checkoutData: () => request("/api/order-workflow/checkout"),

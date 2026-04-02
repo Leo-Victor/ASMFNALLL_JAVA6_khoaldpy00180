@@ -31,7 +31,7 @@ const statusLabel = (status) => {
                 <tr v-for="o in orders" :key="o.id">
                     <td>{{ o.id }}</td>
                     <td>{{ dateTime(o.createDate) }}</td>
-                    <td><span class="badge">{{ statusLabel(o.status) }}</span></td>
+                    <td><span class="badge" style="color:black;">{{ statusLabel(o.status) }}</span></td>
                     <td>{{ o.address }}</td>
                     <td class="table-actions">
                         <router-link class="btn btn-outline" :to="'/order/order-detail?id=' + o.id">Xem chi tiết</router-link>

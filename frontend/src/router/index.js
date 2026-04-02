@@ -20,7 +20,7 @@ import AdminOrderView from "@/views/admin/AdminOrderView.vue";
 import AdminRevenueView from "@/views/admin/AdminRevenueView.vue";
 import AdminVipView from "@/views/admin/AdminVipView.vue";
 import AdminCameraView from "@/views/admin/AdminCameraView.vue";
-import {api} from "@/api";
+import {api, redirectToLoginByFeature} from "@/api";
 
 export const routes = [
     {path: "/auth/login", component: LoginView, meta: {title: "auth/login", template: "auth/login.html"}},
@@ -74,17 +74,11 @@ router.beforeEach(async (to) => {
         const me = (await api.auth.me()).data || {};
         if (!me.username) {
             const feature = to.meta.authFeature || "chức năng này";
-            const accepted = window.confirm(`Bạn cần đăng nhập trước khi thực hiện "${feature}". Nhấn OK để đến trang đăng nhập.`);
+            const accepted = await redirectToLoginByFeature(feature, to.fullPath);
             if (!accepted) {
                 return false;
             }
-            return {
-                path: "/auth/login",
-                query: {
-                    redirect: to.fullPath,
-                    message: `Bạn cần đăng nhập trước khi thực hiện "${feature}".`
-                }
-            };
+            return false;
         }
         if (!requiresAdmin) {
             return true;
@@ -106,17 +100,11 @@ router.beforeEach(async (to) => {
         return {path: "/auth/login", query: {redirect: to.fullPath}};
     } catch (e) {
         const feature = to.meta.authFeature || "chức năng này";
-        const accepted = window.confirm(`Bạn cần đăng nhập trước khi thực hiện "${feature}". Nhấn OK để đến trang đăng nhập.`);
+        const accepted = await redirectToLoginByFeature(feature, to.fullPath);
         if (!accepted) {
             return false;
         }
-        return {
-            path: "/auth/login",
-            query: {
-                redirect: to.fullPath,
-                message: `Bạn cần đăng nhập trước khi thực hiện "${feature}".`
-            }
-        };
+        return false;
     }
 });
 

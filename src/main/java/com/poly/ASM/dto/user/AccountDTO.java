@@ -14,6 +14,8 @@ public class AccountDTO {
     private String username;
     private String fullname;
     private String email;
+    private String phone;
+    private String address;
     private String photo;
     private Boolean activated;
 }

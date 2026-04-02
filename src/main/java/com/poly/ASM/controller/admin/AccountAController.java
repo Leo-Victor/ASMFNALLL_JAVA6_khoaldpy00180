@@ -60,14 +60,19 @@ public class AccountAController {
                                                   @RequestParam("password") String password,
                                                   @RequestParam("fullname") String fullname,
                                                   @RequestParam("email") String email,
+                                                  @RequestParam("phone") String phone,
+                                                  @RequestParam("address") String address,
                                                   @RequestParam(value = "photoFile", required = false) MultipartFile photoFile,
                                                   @RequestParam(value = "activated", required = false) Boolean activated,
                                                   @RequestParam("roleId") String roleId) {
+        validatePhoneAndAddress(phone, address);
         Account account = new Account();
         account.setUsername(username);
         account.setPassword(passwordEncoder.encode(password));
         account.setFullname(fullname);
         account.setEmail(email);
+        account.setPhone(phone.trim());
+        account.setAddress(address.trim());
         String photoName = saveImage(photoFile);
         if (photoName != null) {
             account.setPhoto(photoName);
@@ -91,11 +96,7 @@ public class AccountAController {
             throw new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản");
         }
 
-        String roleId = "USER";
-        List<Authority> authorities = authorityService.findByAccountUsername(username);
-        if (!authorities.isEmpty() && authorities.get(0).getRole() != null) {
-            roleId = authorities.get(0).getRole().getId();
-        }
+        String roleId = resolveRoleId(username);
         Map<String, Object> data = new HashMap<>();
         data.put("account", toAccountView(account.get()));
         data.put("roles", roleService.findAll().stream().map(this::toRoleView).toList());
@@ -108,6 +109,8 @@ public class AccountAController {
                                                   @RequestParam(value = "password", required = false) String password,
                                                   @RequestParam("fullname") String fullname,
                                                   @RequestParam("email") String email,
+                                                  @RequestParam("phone") String phone,
+                                                  @RequestParam("address") String address,
                                                   @RequestParam(value = "photoFile", required = false) MultipartFile photoFile,
                                                   @RequestParam(value = "activated", required = false) Boolean activated,
                                                   @RequestParam("roleId") String roleId) {
@@ -116,11 +119,14 @@ public class AccountAController {
         if (Boolean.TRUE.equals(account.getIsDelete())) {
             throw new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản");
         }
+        validatePhoneAndAddress(phone, address);
         if (password != null && !password.isBlank()) {
             account.setPassword(passwordEncoder.encode(password));
         }
         account.setFullname(fullname);
         account.setEmail(email);
+        account.setPhone(phone.trim());
+        account.setAddress(address.trim());
         String photoName = saveImage(photoFile);
         if (photoName != null) {
             account.setPhoto(photoName);
@@ -174,9 +180,20 @@ public class AccountAController {
         map.put("username", account.getUsername());
         map.put("fullname", account.getFullname());
         map.put("email", account.getEmail());
+        map.put("phone", account.getPhone());
+        map.put("address", account.getAddress());
         map.put("photo", account.getPhoto());
         map.put("activated", account.getActivated());
+        map.put("roleId", resolveRoleId(account.getUsername()));
         return map;
+    }
+
+    private String resolveRoleId(String username) {
+        List<Authority> authorities = authorityService.findByAccountUsername(username);
+        if (!authorities.isEmpty() && authorities.get(0).getRole() != null) {
+            return authorities.get(0).getRole().getId();
+        }
+        return "USER";
     }
 
     private Map<String, Object> toRoleView(Role role) {
@@ -184,5 +201,16 @@ public class AccountAController {
         map.put("id", role.getId());
         map.put("name", role.getName());
         return map;
+    }
+
+    private void validatePhoneAndAddress(String phone, String address) {
+        String normalizedPhone = phone == null ? "" : phone.trim();
+        String normalizedAddress = address == null ? "" : address.trim();
+        if (normalizedPhone.isBlank() || !normalizedPhone.matches("^(0|\\+84)\\d{9,10}$")) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Số điện thoại không hợp lệ");
+        }
+        if (normalizedAddress.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Địa chỉ là bắt buộc");
+        }
     }
 }

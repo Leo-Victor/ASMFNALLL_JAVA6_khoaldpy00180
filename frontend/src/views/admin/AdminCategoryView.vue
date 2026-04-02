@@ -1,8 +1,10 @@
 <script setup>
+import {nextTick, ref} from "vue";
 import {AdminCategoryPage} from "@/legacy/pages";
 import AdminNav from "@/components/AdminNav.vue";
 
-const {rows, modal, openEdit, save, remove} = AdminCategoryPage.setup();
+const {rows, modal, openEdit, save} = AdminCategoryPage.setup();
+const formRef = ref(null);
 
 const resetForm = () => {
     modal.id = "";
@@ -14,6 +16,12 @@ const submit = async () => {
     await save();
     resetForm();
 };
+
+const editCategory = async (id) => {
+    await openEdit(id);
+    await nextTick();
+    formRef.value?.scrollIntoView({behavior: "smooth", block: "start"});
+};
 </script>
 
 <template>
@@ -24,7 +32,7 @@ const submit = async () => {
                 <AdminNav/>
             </div>
             <div class="admin-product-main">
-                <form class="card admin-category-form" @submit.prevent="submit">
+                <form class="card admin-category-form" @submit.prevent="submit" ref="formRef">
                     <div class="form-group">
                         <label>Mã loại</label>
                         <input type="text" v-model="modal.id" :readonly="modal.editing" class="form-control">
@@ -53,8 +61,7 @@ const submit = async () => {
                             <td>{{ c.id }}</td>
                             <td>{{ c.name }}</td>
                             <td class="table-actions">
-                                <button class="btn btn-action-outline" type="button" @click="openEdit(c.id)">Sửa</button>
-                                <button class="btn btn-action-solid" type="button" @click="remove(c.id)">Xoá</button>
+                                <button class="btn btn-action-outline" type="button" @click="editCategory(c.id)">Sửa</button>
                             </td>
                         </tr>
                         </tbody>

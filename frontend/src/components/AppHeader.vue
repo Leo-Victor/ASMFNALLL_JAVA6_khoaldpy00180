@@ -1,12 +1,61 @@
 <script setup>
-import {onMounted} from "vue";
+import {onMounted, onUnmounted, ref, watch} from "vue";
 import {useRouter} from "vue-router";
 import {api} from "@/api";
 import {useSession} from "@/composables/useSession";
 
 const router = useRouter();
 const {state, isAuthenticated, isAdmin, refreshSession, clearSession} = useSession();
-onMounted(refreshSession);
+const notifications = ref([]);
+const unreadCount = ref(0);
+const bellOpen = ref(false);
+let pollTimer = null;
+
+const loadNotifications = async () => {
+    if (!isAuthenticated.value) {
+        notifications.value = [];
+        unreadCount.value = 0;
+        return;
+    }
+    try {
+        const latestRes = await api.notifications.latest(10);
+        notifications.value = latestRes.data || [];
+        const unreadRes = await api.notifications.unreadCount();
+        unreadCount.value = unreadRes.data?.count || 0;
+    } catch (e) {
+    }
+};
+const startPolling = () => {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+    }
+    pollTimer = setInterval(loadNotifications, 10000);
+};
+const stopPolling = () => {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+};
+const toggleBell = async () => {
+    bellOpen.value = !bellOpen.value;
+    if (bellOpen.value) {
+        await loadNotifications();
+    }
+};
+const openNotification = async (notification) => {
+    if (!notification?.id) {
+        return;
+    }
+    try {
+        const res = await api.notifications.read(notification.id);
+        const redirectUrl = res.data?.redirectUrl || notification.redirectUrl || "/home/index";
+        bellOpen.value = false;
+        await loadNotifications();
+        await router.push(redirectUrl);
+    } catch (e) {
+    }
+};
 
 const logout = async () => {
     try {
@@ -14,9 +63,32 @@ const logout = async () => {
     } catch (e) {
     } finally {
         clearSession();
+        stopPolling();
+        notifications.value = [];
+        unreadCount.value = 0;
         await router.push("/home/index");
     }
 };
+
+onMounted(async () => {
+    await refreshSession();
+    await loadNotifications();
+    startPolling();
+});
+
+watch(isAuthenticated, async (value) => {
+    if (!value) {
+        notifications.value = [];
+        unreadCount.value = 0;
+        bellOpen.value = false;
+        return;
+    }
+    await loadNotifications();
+});
+
+onUnmounted(() => {
+    stopPolling();
+});
 </script>
 
 <template>
@@ -43,6 +115,20 @@ const logout = async () => {
                         <router-link class="btn btn-primary btn-sm" to="/account/sign-up">Đăng ký</router-link>
                     </div>
                     <div class="header-user" v-else>
+                        <div class="notification-bell-wrap">
+                            <button class="notification-bell-btn" type="button" @click="toggleBell">
+                                🔔
+                                <span class="notification-badge" v-if="unreadCount > 0">{{ unreadCount }}</span>
+                            </button>
+                            <div class="notification-dropdown" v-if="bellOpen">
+                                <div class="notification-dropdown-title">Thông báo</div>
+                                <button class="notification-item" type="button" v-for="item in notifications" :key="item.id" @click="openNotification(item)">
+                                    <div class="notification-item-title">{{ item.title }}</div>
+                                    <div class="notification-item-content">{{ item.content }}</div>
+                                </button>
+                                <div class="notification-empty" v-if="!notifications.length">Chưa có thông báo</div>
+                            </div>
+                        </div>
                         <span class="user-name">{{ state.me?.username }}</span>
                         <button class="btn btn-outline-secondary btn-sm" type="button" @click="logout">Đăng xuất</button>
                     </div>

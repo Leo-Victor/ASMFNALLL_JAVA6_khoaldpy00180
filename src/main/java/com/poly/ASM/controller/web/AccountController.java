@@ -42,7 +42,9 @@ public class AccountController {
     public ResponseEntity<ApiResponse<?>> signUp(@RequestParam("username") String username,
                                                   @RequestParam("password") String password,
                                                   @RequestParam("fullname") String fullname,
-                                                  @RequestParam("email") String email) {
+                                                  @RequestParam("email") String email,
+                                                  @RequestParam(value = "phone", required = false) String phone,
+                                                  @RequestParam(value = "address", required = false) String address) {
         if (accountService.findByUsername(username).isPresent()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Username đã tồn tại", null));
         }
@@ -55,6 +57,8 @@ public class AccountController {
         account.setPassword(passwordEncoder.encode(password));
         account.setFullname(fullname);
         account.setEmail(email);
+        account.setPhone(phone == null || phone.isBlank() ? "0000000000" : phone.trim());
+        account.setAddress(address == null || address.isBlank() ? "Chưa cập nhật" : address.trim());
         account.setActivated(true);
         Account saved = accountService.create(account);
 
@@ -79,6 +83,8 @@ public class AccountController {
     @PostMapping("/profile")
     public ResponseEntity<ApiResponse<?>> editProfile(@RequestParam("fullname") String fullname,
                                                        @RequestParam("email") String email,
+                                                       @RequestParam(value = "phone", required = false) String phone,
+                                                       @RequestParam(value = "address", required = false) String address,
                                                        @RequestParam(value = "photoFile", required = false) MultipartFile photoFile) {
         Account user = authService.getUser();
         if (user == null) {
@@ -91,6 +97,12 @@ public class AccountController {
 
         user.setFullname(fullname);
         user.setEmail(email);
+        if (phone != null && !phone.isBlank()) {
+            user.setPhone(phone.trim());
+        }
+        if (address != null && !address.isBlank()) {
+            user.setAddress(address.trim());
+        }
         String photoName = savePhoto(photoFile);
         if (photoName != null) {
             user.setPhoto(photoName);

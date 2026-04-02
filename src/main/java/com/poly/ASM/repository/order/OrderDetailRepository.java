@@ -40,7 +40,7 @@ public interface OrderDetailRepository extends JpaRepository<OrderDetail, Long> 
             join fetch d.order o
             join fetch d.product p
             left join fetch p.category c
-            where o.status = 'DELIVERED_SUCCESS'
+            where o.status in ('DELIVERED_SUCCESS', 'DONE')
             order by o.id asc, d.id asc
             """)
     List<OrderDetail> findDeliveredDetailsForRevenue();
@@ -51,7 +51,7 @@ public interface OrderDetailRepository extends JpaRepository<OrderDetail, Long> 
             join fetch d.order o
             join fetch d.product p
             left join fetch p.category c
-            where o.status = 'DELIVERED_SUCCESS'
+            where o.status in ('DELIVERED_SUCCESS', 'DONE')
               and (:fromDate is null or o.createDate >= :fromDate)
               and (:toDate is null or o.createDate <= :toDate)
             order by o.id asc, d.id asc

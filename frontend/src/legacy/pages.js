@@ -155,7 +155,7 @@ const LoginPage = {
 
 const ProductListPage = {
     setup() {
-        const filter = reactive({keyword: "", categoryId: "", page: 0, size: 12});
+        const filter = reactive({keyword: "", categoryId: "", minPrice: "", maxPrice: "", sort: "", page: 0, size: 12});
         const data = ref({});
         const loading = ref(false);
         const error = ref("");
@@ -280,8 +280,16 @@ const CartPage = {
             await load();
         };
         const clear = async () => {
-            await api.cart.clear();
-            await load();
+            try {
+                await api.cart.clear();
+            } catch (e) {
+                const snapshot = [...state.items];
+                for (const item of snapshot) {
+                    await api.cart.remove(item.productId, item.sizeId);
+                }
+            } finally {
+                await load();
+            }
         };
         onMounted(load);
         return {state, error, loading, load, updateItem, removeItem, clear, money};
@@ -651,9 +659,22 @@ const AdminAccountPage = {
     setup() {
         const rows = ref([]);
         const roles = ref([]);
-        const form = reactive({username: "", password: "", fullname: "", email: "", roleId: "USER", activated: true});
+        const form = reactive({
+            username: "",
+            password: "",
+            fullname: "",
+            email: "",
+            phone: "",
+            address: "",
+            roleId: "USER",
+            activated: true,
+            photo: "",
+            photoFile: null
+        });
+        const modalOpen = ref(false);
         const editing = ref(false);
         const msg = ref("");
+        const isValidPhone = (phone) => /^(0|\+84)\d{9,10}$/.test((phone || "").trim());
         const load = async () => {
             const res = await api.admin.accounts.list();
             rows.value = res.data?.accounts || [];
@@ -665,22 +686,55 @@ const AdminAccountPage = {
             form.username = data.account?.username || username;
             form.fullname = data.account?.fullname || "";
             form.email = data.account?.email || "";
+            form.phone = data.account?.phone || "";
+            form.address = data.account?.address || "";
+            form.photo = data.account?.photo || "";
+            form.photoFile = null;
             form.password = "";
             form.activated = data.account?.activated ?? true;
             form.roleId = data.roleId || "USER";
             editing.value = true;
+            modalOpen.value = true;
+        };
+        const openCreate = () => {
+            reset();
+            editing.value = false;
+            modalOpen.value = true;
         };
         const reset = () => {
             form.username = "";
             form.password = "";
             form.fullname = "";
             form.email = "";
+            form.phone = "";
+            form.address = "";
             form.roleId = "USER";
             form.activated = true;
+            form.photo = "";
+            form.photoFile = null;
             editing.value = false;
+        };
+        const closeModal = () => {
+            modalOpen.value = false;
+            reset();
+        };
+        const onPhotoChange = (event) => {
+            form.photoFile = event?.target?.files?.[0] || null;
         };
         const save = async () => {
             try {
+                if (!form.phone?.trim()) {
+                    msg.value = "Số điện thoại là bắt buộc";
+                    return;
+                }
+                if (!isValidPhone(form.phone)) {
+                    msg.value = "Số điện thoại không hợp lệ";
+                    return;
+                }
+                if (!form.address?.trim()) {
+                    msg.value = "Địa chỉ là bắt buộc";
+                    return;
+                }
                 if (editing.value) {
                     await api.admin.accounts.update(form.username, form);
                     msg.value = "Cập nhật tài khoản thành công";
@@ -689,7 +743,7 @@ const AdminAccountPage = {
                     msg.value = "Tạo tài khoản thành công";
                 }
                 await load();
-                reset();
+                closeModal();
             } catch (e) {
                 msg.value = e.message;
             }
@@ -699,7 +753,7 @@ const AdminAccountPage = {
             await load();
         };
         onMounted(load);
-        return {rows, roles, form, editing, msg, edit, reset, save, remove};
+        return {rows, roles, form, modalOpen, editing, msg, edit, openCreate, closeModal, onPhotoChange, save, remove};
     },
     template: `
       <div>
@@ -793,6 +847,7 @@ const AdminProductPage = {
         const state = reactive({
             rows: [],
             categories: [],
+            sizes: [],
             page: 0,
             totalPages: 0,
             keyword: "",
@@ -800,7 +855,18 @@ const AdminProductPage = {
             minPrice: "",
             maxPrice: ""
         });
-        const form = reactive({id: "", name: "", price: "", discount: "", quantity: "", available: true, categoryId: "", description: ""});
+        const form = reactive({
+            id: "",
+            name: "",
+            price: "",
+            discount: "",
+            quantity: "",
+            image: "",
+            imageFile: null,
+            categoryId: "",
+            description: "",
+            sizeQtyMap: {}
+        });
         const editing = ref(false);
         const message = ref("");
         const load = async () => {
@@ -815,6 +881,7 @@ const AdminProductPage = {
                 const data = res.data || {};
                 state.rows = data.products || [];
                 state.categories = data.categories || [];
+                state.sizes = data.sizes || [];
                 state.totalPages = data.totalPages || 0;
                 message.value = "";
             } catch (e) {
@@ -830,9 +897,15 @@ const AdminProductPage = {
             form.price = p.price || "";
             form.discount = p.discount || "";
             form.quantity = p.quantity || "";
-            form.available = p.available ?? true;
+            form.image = p.image || "";
+            form.imageFile = null;
             form.categoryId = p.category?.id || "";
             form.description = p.description || "";
+            form.sizeQtyMap = {};
+            const map = res.data?.sizeQtyMap || {};
+            Object.keys(map).forEach((key) => {
+                form.sizeQtyMap[key] = Number(map[key] || 0);
+            });
             editing.value = true;
         };
         const reset = () => {
@@ -841,13 +914,34 @@ const AdminProductPage = {
             form.price = "";
             form.discount = "";
             form.quantity = "";
-            form.available = true;
+            form.image = "";
+            form.imageFile = null;
             form.categoryId = "";
             form.description = "";
+            form.sizeQtyMap = {};
             editing.value = false;
         };
         const save = async () => {
-            const payload = {...form};
+            const payload = {
+                name: form.name,
+                price: form.price,
+                discount: form.discount,
+                categoryId: form.categoryId,
+                description: form.description
+            };
+            if (form.imageFile) {
+                payload.imageFile = form.imageFile;
+            }
+            let totalQty = 0;
+            state.sizes.forEach((size) => {
+                const key = String(size.id);
+                const raw = form.sizeQtyMap?.[key];
+                const qty = Number.isFinite(Number(raw)) ? Math.max(0, Number(raw)) : 0;
+                payload[`size_${size.id}`] = String(qty);
+                totalQty += qty;
+            });
+            payload.quantity = totalQty;
+            form.quantity = totalQty;
             if (editing.value) {
                 await api.admin.products.update(form.id, payload);
                 message.value = "Cập nhật sản phẩm thành công";

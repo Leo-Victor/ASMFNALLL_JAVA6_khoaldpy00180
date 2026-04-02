@@ -61,19 +61,31 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public void notifyOrderStatusChange(Order order, String status) {
-        if (order.getAccount() == null) {
-            return;
-        }
-        String title = "Cập nhật đơn hàng";
-        String content;
+        String userTitle = "Cập nhật đơn hàng";
+        String userContent;
+        String adminTitle;
+        String adminContent;
         if ("DELIVERED_SUCCESS".equals(status) || "DONE".equals(status)) {
-            content = "Đơn hàng #" + order.getId() + " đã được giao thành công";
+            userContent = "Đơn hàng #" + order.getId() + " đã được giao thành công";
+            adminTitle = "Giao hàng thành công";
+            adminContent = "Đơn hàng #" + order.getId() + " đã giao thành công";
         } else if ("DELIVERY_FAILED".equals(status) || "CANCEL".equals(status)) {
-            content = "Đơn hàng #" + order.getId() + " giao hàng thất bại";
+            userContent = "Đơn hàng #" + order.getId() + " giao hàng thất bại";
+            adminTitle = "Giao hàng thất bại";
+            adminContent = "Đơn hàng #" + order.getId() + " giao hàng thất bại";
         } else {
             return;
         }
-        createNotification(order.getAccount(), order, title, content);
+        if (order.getAccount() != null) {
+            createNotification(order.getAccount(), order, userTitle, userContent);
+        }
+        List<Authority> admins = authorityRepository.findByRoleId("ADMIN");
+        for (Authority authority : admins) {
+            Account account = authority.getAccount();
+            if (account != null) {
+                createNotification(account, order, adminTitle, adminContent);
+            }
+        }
     }
 
     @Override

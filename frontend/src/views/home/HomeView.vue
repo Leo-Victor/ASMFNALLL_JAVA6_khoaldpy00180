@@ -85,7 +85,7 @@ onUnmounted(() => {
                 <div class="carousel-track" ref="carouselTrack">
                     <div class="carousel-slide active">
                         <div class="carousel-content">
-                            <h1 class="carousel-title">Bộ sưu tập Xuân Hè 2024</h1>
+                            <h1 class="carousel-title">Bộ sưu tập Xuân Hè 2026</h1>
                             <p class="carousel-subtitle">Khám phá phong cách mới, tự tin tỏa sáng</p>
                             <router-link to="/product/list" class="btn btn-primary carousel-btn">Khám phá ngay</router-link>
                         </div>

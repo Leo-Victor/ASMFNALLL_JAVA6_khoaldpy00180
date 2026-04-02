@@ -2,6 +2,7 @@ package com.poly.ASM.controller.admin;
 
 import com.poly.ASM.dto.common.ApiResponse;
 import com.poly.ASM.entity.order.Order;
+import com.poly.ASM.exception.ApiException;
 import com.poly.ASM.service.notification.NotificationService;
 import com.poly.ASM.service.order.OrderDetailService;
 import com.poly.ASM.service.order.OrderService;
@@ -99,6 +100,9 @@ public class OrderAController {
                                                         @RequestParam("status") String status) {
         orderService.findById(id).ifPresent(order -> {
             String previous = order.getStatus();
+            if (!isValidTransition(previous, status)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Trạng thái không hợp lệ cho bước cập nhật hiện tại");
+            }
             order.setStatus(status);
             orderService.update(order);
             if (previous == null || !previous.equals(status)) {
@@ -106,6 +110,28 @@ public class OrderAController {
             }
         });
         return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái đơn hàng thành công", Map.of("id", id, "status", status)));
+    }
+
+    private boolean isValidTransition(String currentStatus, String nextStatus) {
+        if (currentStatus == null || nextStatus == null || nextStatus.isBlank()) {
+            return false;
+        }
+        if ("PLACED_UNPAID".equals(currentStatus)) {
+            return "SHIPPING_UNPAID".equals(nextStatus);
+        }
+        if ("PLACED_PAID".equals(currentStatus)) {
+            return "SHIPPING_PAID".equals(nextStatus);
+        }
+        if ("SHIPPING_UNPAID".equals(currentStatus) || "SHIPPING_PAID".equals(currentStatus)) {
+            return "DELIVERED_SUCCESS".equals(nextStatus) || "DELIVERY_FAILED".equals(nextStatus);
+        }
+        if ("DELIVERED_SUCCESS".equals(currentStatus) || "DONE".equals(currentStatus)) {
+            return "DELIVERED_SUCCESS".equals(nextStatus) || "DONE".equals(nextStatus);
+        }
+        if ("DELIVERY_FAILED".equals(currentStatus) || "CANCEL".equals(currentStatus)) {
+            return "DELIVERY_FAILED".equals(nextStatus) || "CANCEL".equals(nextStatus);
+        }
+        return currentStatus.equals(nextStatus);
     }
 
     @PostMapping("/payos/cancel")

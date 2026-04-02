@@ -4,6 +4,9 @@ import {AdminProductPage} from "@/legacy/pages";
 import AdminNav from "@/components/AdminNav.vue";
 
 const {state, form, editing, message, load, edit, reset, save, remove, next, prev, money} = AdminProductPage.setup();
+const PRICE_MIN = 0;
+const PRICE_MAX = 2000000;
+const PRICE_STEP = 50000;
 const modalOpen = ref(false);
 const errorMessage = ref("");
 const successMessage = ref("");
@@ -15,15 +18,41 @@ const filters = ref({
     minPrice: "",
     maxPrice: ""
 });
+const selectedPriceRange = ref("all");
+const sliderMin = ref(PRICE_MIN);
+const sliderMax = ref(PRICE_MAX);
+const priceRanges = [
+    {id: "all", label: "Tất cả", min: "", max: ""},
+    {id: "lt100", label: "Dưới 100.000", min: "", max: 100000},
+    {id: "100_300", label: "Từ 100k - 300k", min: 100000, max: 300000},
+    {id: "300_500", label: "Từ 300k - 500k", min: 300000, max: 500000},
+    {id: "gt500", label: "Trên 500k", min: 500000, max: ""}
+];
 const listRef = ref(null);
 
 const displayedProducts = computed(() => state.rows || []);
+const sizeTotalQuantity = computed(() => (state.sizes || []).reduce((total, size) => {
+    const qty = Number(form.sizeQtyMap?.[String(size.id)] || 0);
+    return total + (Number.isFinite(qty) ? Math.max(0, qty) : 0);
+}, 0));
 
 const resolveImage = (name) => name ? `/images/${name}` : "/images/logo.png";
 const formatCurrency = (val) => money(val);
+const ensureSizeInputs = () => {
+    if (!form.sizeQtyMap) {
+        form.sizeQtyMap = {};
+    }
+    (state.sizes || []).forEach((size) => {
+        const key = String(size.id);
+        if (form.sizeQtyMap[key] === undefined || form.sizeQtyMap[key] === null) {
+            form.sizeQtyMap[key] = 0;
+        }
+    });
+};
 const openCreateModal = () => {
     reset();
     editing.value = false;
+    ensureSizeInputs();
     modalMessage.value = "";
     modalMessageError.value = false;
     modalOpen.value = true;
@@ -37,11 +66,13 @@ const openEditModal = async (product) => {
         form.price = product.price || "";
         form.discount = product.discount || "";
         form.quantity = product.quantity || "";
-        form.available = product.available ?? true;
+        form.image = product.image || "";
+        form.imageFile = null;
         form.categoryId = product.category?.id || product.categoryId || "";
         form.description = product.description || "";
         errorMessage.value = e.message || "Không tải được chi tiết sản phẩm, đang mở form với dữ liệu hiện có.";
     }
+    ensureSizeInputs();
     modalMessage.value = "";
     modalMessageError.value = false;
     modalOpen.value = true;
@@ -54,6 +85,7 @@ const closeModal = () => {
 };
 const submitForm = async () => {
     const wasEditing = editing.value;
+    form.quantity = sizeTotalQuantity.value;
     try {
         await save();
         await load();
@@ -67,6 +99,10 @@ const submitForm = async () => {
         modalMessageError.value = true;
         errorMessage.value = modalMessage.value;
     }
+};
+const onImageChange = (event) => {
+    const file = event?.target?.files?.[0] || null;
+    form.imageFile = file;
 };
 const removeProduct = async (product) => {
     const accepted = typeof window !== "undefined"
@@ -88,17 +124,53 @@ const scrollToResults = async () => {
     await nextTick();
     listRef.value?.scrollIntoView({behavior: "smooth", block: "start"});
 };
+const normalizePrice = (value) => {
+    if (value === "" || value === null || value === undefined) {
+        return "";
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : "";
+};
+const applySliderToFilter = () => {
+    filters.value.minPrice = Math.min(sliderMin.value, sliderMax.value);
+    filters.value.maxPrice = Math.max(sliderMin.value, sliderMax.value);
+};
+const onSliderMinInput = () => {
+    if (sliderMin.value > sliderMax.value) {
+        sliderMax.value = sliderMin.value;
+    }
+    selectedPriceRange.value = "all";
+    applySliderToFilter();
+};
+const onSliderMaxInput = () => {
+    if (sliderMax.value < sliderMin.value) {
+        sliderMin.value = sliderMax.value;
+    }
+    selectedPriceRange.value = "all";
+    applySliderToFilter();
+};
 const applyFilters = async () => {
     state.page = 0;
     state.keyword = filters.value.keyword?.trim() || "";
     state.categoryId = filters.value.categoryId || "";
-    state.minPrice = filters.value.minPrice === "" ? "" : Number(filters.value.minPrice);
-    state.maxPrice = filters.value.maxPrice === "" ? "" : Number(filters.value.maxPrice);
+    state.minPrice = normalizePrice(filters.value.minPrice);
+    state.maxPrice = normalizePrice(filters.value.maxPrice);
     await load();
     await scrollToResults();
 };
+const applyPriceRange = async () => {
+    const selected = priceRanges.find((range) => range.id === selectedPriceRange.value) || priceRanges[0];
+    filters.value.minPrice = selected.min;
+    filters.value.maxPrice = selected.max;
+    sliderMin.value = selected.min === "" ? PRICE_MIN : Number(selected.min);
+    sliderMax.value = selected.max === "" ? PRICE_MAX : Number(selected.max);
+    await applyFilters();
+};
 const clearFilters = async () => {
     filters.value = {keyword: "", categoryId: "", minPrice: "", maxPrice: ""};
+    selectedPriceRange.value = "all";
+    sliderMin.value = PRICE_MIN;
+    sliderMax.value = PRICE_MAX;
     state.page = 0;
     state.keyword = "";
     state.categoryId = "";
@@ -169,13 +241,24 @@ const clearFilters = async () => {
                             <option v-for="c in state.categories" :key="c.id" :value="c.id">{{ c.name }}</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label>Giá từ</label>
-                        <input type="number" step="0.01" v-model.number="filters.minPrice">
-                    </div>
-                    <div class="form-group">
-                        <label>Giá đến</label>
-                        <input type="number" step="0.01" v-model.number="filters.maxPrice">
+                    <div class="form-group full-span">
+                        <label>Mức giá</label>
+                        <div class="price-range-list">
+                            <label class="price-range-item" v-for="range in priceRanges" :key="'admin-'+range.id">
+                                <input type="radio" name="admin-product-price-range" v-model="selectedPriceRange" :value="range.id" @change="applyPriceRange">
+                                <span>{{ range.label }}</span>
+                            </label>
+                        </div>
+                        <p class="price-range-note">Hoặc nhập khoảng giá phù hợp với bạn:</p>
+                        <div class="price-custom-slider">
+                            <div class="price-slider-values">
+                                <strong>{{ money(sliderMin) }}đ</strong>
+                                <span>~</span>
+                                <strong>{{ money(sliderMax) }}đ</strong>
+                            </div>
+                            <input type="range" :min="PRICE_MIN" :max="PRICE_MAX" :step="PRICE_STEP" v-model.number="sliderMin" @input="onSliderMinInput">
+                            <input type="range" :min="PRICE_MIN" :max="PRICE_MAX" :step="PRICE_STEP" v-model.number="sliderMax" @input="onSliderMaxInput">
+                        </div>
                     </div>
                     <div class="table-actions">
                         <button class="btn btn-primary" type="submit">Áp dụng</button>
@@ -210,21 +293,27 @@ const clearFilters = async () => {
                             <label>Giảm giá (%)</label>
                             <input type="number" step="0.01" min="0" v-model.number="form.discount">
                         </div>
-                        <div class="form-group">
-                            <label>Số lượng</label>
-                            <input type="number" min="0" v-model.number="form.quantity">
+                        <div class="form-group full-span">
+                            <label>Ảnh sản phẩm</label>
+                            <input type="file" accept="image/*" @change="onImageChange">
+                            <div class="form-hint" v-if="form.image">Ảnh hiện tại: {{ form.image }}</div>
                         </div>
                         <div class="form-group full-span">
-                            <label>Ảnh (tên file hoặc URL)</label>
-                            <input type="text" v-model.trim="form.image">
+                            <label>Số lượng theo size</label>
+                            <div class="size-quantity-grid">
+                                <div class="form-group" v-for="size in state.sizes" :key="'sz-'+size.id">
+                                    <label>Size {{ size.name }}</label>
+                                    <input type="number" min="0" v-model.number="form.sizeQtyMap[String(size.id)]">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Tổng số lượng</label>
+                            <input type="number" :value="sizeTotalQuantity" readonly>
                         </div>
                         <div class="form-group full-span">
                             <label>Mô tả</label>
                             <input type="text" v-model.trim="form.description">
-                        </div>
-                        <div class="form-group">
-                            <label>Còn hàng</label>
-                            <input type="checkbox" v-model="form.available">
                         </div>
                         <div class="form-group">
                             <label>Danh mục</label>

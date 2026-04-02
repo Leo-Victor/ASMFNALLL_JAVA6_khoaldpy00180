@@ -75,18 +75,18 @@ public class ProductAController {
     public ResponseEntity<ApiResponse<?>> create(@RequestParam("name") String name,
                                                   @RequestParam("price") BigDecimal price,
                                                   @RequestParam(value = "discount", required = false) BigDecimal discount,
-                                                  @RequestParam(value = "available", required = false) Boolean available,
-                                                  @RequestParam(value = "quantity", required = false) Integer quantity,
                                                   @RequestParam(value = "imageFile", required = false) MultipartFile imageFile,
                                                   @RequestParam(value = "description", required = false) String description,
                                                   @RequestParam("categoryId") String categoryId,
                                                   @RequestParam Map<String, String> params) {
+        Map<Integer, Integer> sizeQtyMap = parseSizeQuantities(params);
+        int totalQuantity = sizeQtyMap.values().stream().mapToInt(Integer::intValue).sum();
         Product product = new Product();
         product.setName(name);
         product.setPrice(price);
         product.setDiscount(discount);
-        product.setAvailable(available != null ? available : true);
-        product.setQuantity(quantity);
+        product.setAvailable(totalQuantity > 0);
+        product.setQuantity(totalQuantity);
         String imageName = saveImage(imageFile);
         if (imageName != null) {
             product.setImage(imageName);
@@ -94,7 +94,7 @@ public class ProductAController {
         product.setDescription(description);
         categoryService.findById(categoryId).ifPresent(product::setCategory);
         Product saved = productService.create(product);
-        saveProductSizes(saved, params);
+        saveProductSizes(saved, sizeQtyMap);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Tạo sản phẩm thành công", null));
     }
 
@@ -137,19 +137,19 @@ public class ProductAController {
                                                   @RequestParam("name") String name,
                                                   @RequestParam("price") BigDecimal price,
                                                   @RequestParam(value = "discount", required = false) BigDecimal discount,
-                                                  @RequestParam(value = "available", required = false) Boolean available,
-                                                  @RequestParam(value = "quantity", required = false) Integer quantity,
                                                   @RequestParam(value = "imageFile", required = false) MultipartFile imageFile,
                                                   @RequestParam(value = "description", required = false) String description,
                                                   @RequestParam("categoryId") String categoryId,
                                                   @RequestParam Map<String, String> params) {
+        Map<Integer, Integer> sizeQtyMap = parseSizeQuantities(params);
+        int totalQuantity = sizeQtyMap.values().stream().mapToInt(Integer::intValue).sum();
         Product product = productService.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy sản phẩm"));
         product.setName(name);
         product.setPrice(price);
         product.setDiscount(discount);
-        product.setAvailable(available != null ? available : true);
-        product.setQuantity(quantity);
+        product.setAvailable(totalQuantity > 0);
+        product.setQuantity(totalQuantity);
         String imageName = saveImage(imageFile);
         if (imageName != null) {
             product.setImage(imageName);
@@ -158,7 +158,7 @@ public class ProductAController {
         categoryService.findById(categoryId).ifPresent(product::setCategory);
         Product saved = productService.update(product);
         productSizeService.deleteByProductId(saved.getId());
-        saveProductSizes(saved, params);
+        saveProductSizes(saved, sizeQtyMap);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật sản phẩm thành công", null));
     }
 
@@ -188,20 +188,10 @@ public class ProductAController {
         }
     }
 
-    private void saveProductSizes(Product product, Map<String, String> params) {
+    private void saveProductSizes(Product product, Map<Integer, Integer> sizeQtyMap) {
         List<Size> sizes = sizeService.findAll();
         for (Size size : sizes) {
-            String key = "size_" + size.getId();
-            if (!params.containsKey(key)) {
-                continue;
-            }
-            String value = params.get(key);
-            int qty = 0;
-            try {
-                qty = Integer.parseInt(value);
-            } catch (NumberFormatException ignored) {
-                qty = 0;
-            }
+            int qty = sizeQtyMap.getOrDefault(size.getId(), 0);
             if (qty <= 0) {
                 continue;
             }
@@ -211,6 +201,25 @@ public class ProductAController {
             productSize.setQuantity(qty);
             productSizeService.save(productSize);
         }
+    }
+
+    private Map<Integer, Integer> parseSizeQuantities(Map<String, String> params) {
+        List<Size> sizes = sizeService.findAll();
+        Map<Integer, Integer> sizeQtyMap = new HashMap<>();
+        for (Size size : sizes) {
+            String key = "size_" + size.getId();
+            if (!params.containsKey(key)) {
+                continue;
+            }
+            int qty;
+            try {
+                qty = Integer.parseInt(params.get(key));
+            } catch (NumberFormatException e) {
+                qty = 0;
+            }
+            sizeQtyMap.put(size.getId(), Math.max(0, qty));
+        }
+        return sizeQtyMap;
     }
 
     private Map<Integer, Integer> buildSizeQtyMap(Product product) {

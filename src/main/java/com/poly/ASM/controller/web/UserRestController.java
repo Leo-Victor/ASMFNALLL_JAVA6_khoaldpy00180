@@ -6,6 +6,7 @@ import com.poly.ASM.entity.user.Account;
 import com.poly.ASM.service.user.AccountService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.Optional;
 public class UserRestController {
 
     private final AccountService accountService;
+    private final PasswordEncoder passwordEncoder;
 
     @GetMapping
     public List<AccountDTO> findAll() {
@@ -74,6 +76,8 @@ public class UserRestController {
         dto.setUsername(account.getUsername());
         dto.setFullname(account.getFullname());
         dto.setEmail(account.getEmail());
+        dto.setPhone(account.getPhone());
+        dto.setAddress(account.getAddress());
         dto.setPhoto(account.getPhoto());
         dto.setActivated(account.getActivated());
         return dto;
@@ -82,9 +86,9 @@ public class UserRestController {
     private void applyRequest(Account account, AccountRequestDTO request, boolean isCreate) {
         if (isCreate) {
             account.setUsername(request.getUsername());
-            account.setPassword(request.getPassword());
+            account.setPassword(passwordEncoder.encode(request.getPassword()));
         } else if (request.getPassword() != null && !request.getPassword().isBlank()) {
-            account.setPassword(request.getPassword());
+            account.setPassword(passwordEncoder.encode(request.getPassword()));
         }
 
         if (request.getFullname() != null) {
@@ -92,6 +96,16 @@ public class UserRestController {
         }
         if (request.getEmail() != null) {
             account.setEmail(request.getEmail());
+        }
+        if (request.getPhone() != null && !request.getPhone().isBlank()) {
+            account.setPhone(request.getPhone().trim());
+        } else if (isCreate) {
+            account.setPhone("0000000000");
+        }
+        if (request.getAddress() != null && !request.getAddress().isBlank()) {
+            account.setAddress(request.getAddress().trim());
+        } else if (isCreate) {
+            account.setAddress("Chưa cập nhật");
         }
         if (request.getPhoto() != null) {
             account.setPhoto(request.getPhoto());

@@ -82,6 +82,8 @@ public class GoogleOAuth2LoginSuccessHandler extends SavedRequestAwareAuthentica
         account.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
         account.setFullname(limit(displayName.isBlank() ? username : displayName, 100));
         account.setEmail(limit(email, 100));
+        account.setPhone("0000000000");
+        account.setAddress("Chưa cập nhật");
         account.setPhoto(limit(photoUrl, 255));
         account.setActivated(true);
         return accountService.create(account);

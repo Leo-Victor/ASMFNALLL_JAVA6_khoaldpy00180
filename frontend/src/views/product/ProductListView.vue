@@ -4,6 +4,9 @@ import {nextTick, ref} from "vue";
 
 const {filter, data, loading, error, load, next, prev, productCard} = ProductListPage.setup();
 const money = (value) => Number(value || 0).toLocaleString("vi-VN");
+const PRICE_MIN = 0;
+const PRICE_MAX = 2000000;
+const PRICE_STEP = 50000;
 const discountPercent = (product) => Math.max(0, Number(product?.discount || 0));
 const hasDiscount = (product) => discountPercent(product) > 0;
 const finalPrice = (product) => {
@@ -12,6 +15,34 @@ const finalPrice = (product) => {
     return Math.max(0, price - (price * percent / 100));
 };
 const resultsRef = ref(null);
+const selectedPriceRange = ref("all");
+const sliderMin = ref(PRICE_MIN);
+const sliderMax = ref(PRICE_MAX);
+const priceRanges = [
+    {id: "all", label: "Tất cả", min: "", max: ""},
+    {id: "lt100", label: "Dưới 100.000", min: "", max: 100000},
+    {id: "100_300", label: "Từ 100k - 300k", min: 100000, max: 300000},
+    {id: "300_500", label: "Từ 300k - 500k", min: 300000, max: 500000},
+    {id: "gt500", label: "Trên 500k", min: 500000, max: ""}
+];
+const applySliderToFilter = () => {
+    filter.minPrice = Math.min(sliderMin.value, sliderMax.value);
+    filter.maxPrice = Math.max(sliderMin.value, sliderMax.value);
+};
+const onSliderMinInput = () => {
+    if (sliderMin.value > sliderMax.value) {
+        sliderMax.value = sliderMin.value;
+    }
+    selectedPriceRange.value = "all";
+    applySliderToFilter();
+};
+const onSliderMaxInput = () => {
+    if (sliderMax.value < sliderMin.value) {
+        sliderMin.value = sliderMax.value;
+    }
+    selectedPriceRange.value = "all";
+    applySliderToFilter();
+};
 const scrollToResults = async () => {
     await nextTick();
     resultsRef.value?.scrollIntoView({behavior: "smooth", block: "start"});
@@ -26,9 +57,23 @@ const applySelectFilters = async () => {
     await load();
     await scrollToResults();
 };
+const applyPriceRange = async () => {
+    const selected = priceRanges.find((range) => range.id === selectedPriceRange.value) || priceRanges[0];
+    filter.minPrice = selected.min;
+    filter.maxPrice = selected.max;
+    sliderMin.value = selected.min === "" ? PRICE_MIN : Number(selected.min);
+    sliderMax.value = selected.max === "" ? PRICE_MAX : Number(selected.max);
+    await applySelectFilters();
+};
 const clearFilters = async () => {
     filter.keyword = "";
     filter.categoryId = "";
+    filter.minPrice = "";
+    filter.maxPrice = "";
+    filter.sort = "";
+    selectedPriceRange.value = "all";
+    sliderMin.value = PRICE_MIN;
+    sliderMax.value = PRICE_MAX;
     filter.page = 0;
     await load();
     await scrollToResults();
@@ -61,9 +106,28 @@ const clearFilters = async () => {
                             <div class="form-group">
                                 <select v-model="filter.sort" class="form-control" @change="applySelectFilters">
                                     <option value="">Mặc định</option>
-                                    <option value="priceAsc">Giá tăng dần</option>
-                                    <option value="priceDesc">Giá giảm dần</option>
+                                    <option value="price_asc">Giá tăng dần</option>
+                                    <option value="price_desc">Giá giảm dần</option>
                                 </select>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <h4 class="filter-title">Mức giá</h4>
+                            <div class="price-range-list">
+                                <label class="price-range-item" v-for="range in priceRanges" :key="range.id">
+                                    <input type="radio" name="product-price-range" v-model="selectedPriceRange" :value="range.id" @change="applyPriceRange">
+                                    <span>{{ range.label }}</span>
+                                </label>
+                            </div>
+                            <p class="price-range-note">Hoặc nhập khoảng giá phù hợp với bạn:</p>
+                            <div class="price-custom-slider">
+                                <div class="price-slider-values">
+                                    <strong>{{ money(sliderMin) }}đ</strong>
+                                    <span>~</span>
+                                    <strong>{{ money(sliderMax) }}đ</strong>
+                                </div>
+                                <input type="range" :min="PRICE_MIN" :max="PRICE_MAX" :step="PRICE_STEP" v-model.number="sliderMin" @input="onSliderMinInput">
+                                <input type="range" :min="PRICE_MIN" :max="PRICE_MAX" :step="PRICE_STEP" v-model.number="sliderMax" @input="onSliderMaxInput">
                             </div>
                         </div>
                         <div class="filter-actions">

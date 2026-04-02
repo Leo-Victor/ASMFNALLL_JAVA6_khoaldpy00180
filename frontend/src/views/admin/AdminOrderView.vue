@@ -1,10 +1,13 @@
 <script setup>
-import {nextTick, onUnmounted, ref, watch} from "vue";
+import {computed, nextTick, onMounted, onUnmounted, ref, watch} from "vue";
+import {useRoute} from "vue-router";
 import {AdminOrderPage} from "@/legacy/pages";
 import AdminNav from "@/components/AdminNav.vue";
 
-const {rows, selected, status, payosCode, msg, detail, updateStatus, cancelPayos, remove} = AdminOrderPage.setup();
+const {rows, selected, status, payosCode, msg, detail: fetchDetail, updateStatus, cancelPayos} = AdminOrderPage.setup();
+const route = useRoute();
 const mapRef = ref(null);
+const detailModalOpen = ref(false);
 let map = null;
 let marker = null;
 let destMarker = null;
@@ -21,7 +24,53 @@ const statusLabel = (value) => {
     };
     return labels[value] || value || "Không rõ";
 };
-const statusColor = (value) => value === "DELIVERED_SUCCESS" ? "#64d441" : "#b62c54";
+const isDelivered = (value) => value === "DELIVERED_SUCCESS" || value === "DONE";
+const statusColor = (value) => isDelivered(value) ? "#64d441" : "#b62c54";
+const statusOptions = computed(() => {
+    const current = selected.value?.order?.status || "";
+    if (current === "PLACED_UNPAID") {
+        return [{value: "SHIPPING_UNPAID", label: "Đang giao - chưa TT"}];
+    }
+    if (current === "PLACED_PAID") {
+        return [{value: "SHIPPING_PAID", label: "Đang giao - đã TT"}];
+    }
+    if (current === "SHIPPING_UNPAID") {
+        return [
+            {value: "SHIPPING_UNPAID", label: "Đang giao - chưa TT"},
+            {value: "DELIVERED_SUCCESS", label: "Giao thành công"},
+            {value: "DELIVERY_FAILED", label: "Giao thất bại"}
+        ];
+    }
+    if (current === "SHIPPING_PAID") {
+        return [
+            {value: "SHIPPING_PAID", label: "Đang giao - đã TT"},
+            {value: "DELIVERED_SUCCESS", label: "Giao thành công"},
+            {value: "DELIVERY_FAILED", label: "Giao thất bại"}
+        ];
+    }
+    if (isDelivered(current)) {
+        return [{value: current, label: "Giao thành công"}];
+    }
+    if (current === "DELIVERY_FAILED" || current === "CANCEL") {
+        return [{value: current, label: "Giao thất bại"}];
+    }
+    return [{value: current || "PLACED_UNPAID", label: statusLabel(current || "PLACED_UNPAID")}];
+});
+const canUpdateStatus = computed(() => !isDelivered(selected.value?.order?.status || ""));
+const openDetail = async (id) => {
+    await fetchDetail(id);
+    const firstOption = statusOptions.value[0]?.value;
+    if (firstOption && !statusOptions.value.some((item) => item.value === status.value)) {
+        status.value = firstOption;
+    }
+    detailModalOpen.value = true;
+    await nextTick();
+    await initMap();
+};
+const closeDetailModal = () => {
+    detailModalOpen.value = false;
+    clearSimulation();
+};
 const ensureLeaflet = async () => {
     if (window.L) {
         return window.L;
@@ -57,6 +106,8 @@ const initMap = async () => {
     if (!map) {
         map = L.map(mapRef.value).setView([(store[0] + dest[0]) / 2, (store[1] + dest[1]) / 2], 12);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19}).addTo(map);
+    } else {
+        map.invalidateSize();
     }
     if (routeLine) {
         map.removeLayer(routeLine);
@@ -90,11 +141,18 @@ const initMap = async () => {
     }
 };
 watch(selected, async () => {
+    const firstOption = statusOptions.value[0]?.value;
+    if (firstOption && !statusOptions.value.some((item) => item.value === status.value)) {
+        status.value = firstOption;
+    }
+    if (!detailModalOpen.value) {
+        return;
+    }
     await nextTick();
     await initMap();
 });
 watch(status, async () => {
-    if (selected.value) {
+    if (selected.value && detailModalOpen.value) {
         await initMap();
     }
 });
@@ -102,6 +160,12 @@ onUnmounted(() => {
     clearSimulation();
     if (map) {
         map.remove();
+    }
+});
+onMounted(async () => {
+    const queryOrderId = Number(route.query.orderId || "");
+    if (Number.isFinite(queryOrderId) && queryOrderId > 0) {
+        await openDetail(queryOrderId);
     }
 });
 </script>
@@ -139,50 +203,51 @@ onUnmounted(() => {
                             <td>{{ o.account?.username || "N/A" }}</td>
                             <td><span class="badge" :style="{color: statusColor(o.status)}">{{ statusLabel(o.status) }}</span></td>
                             <td class="table-actions">
-                                <button class="btn btn-action-outline" type="button" @click="detail(o.id)">Chi tiết</button>
-                                <button class="btn btn-action-solid" type="button" @click="remove(o.id)">Xoá</button>
+                                <button class="btn btn-action-outline" type="button" @click="openDetail(o.id)">Chi tiết</button>
                             </td>
                         </tr>
                         </tbody>
                     </table>
                 </div>
-                <div class="card" v-if="selected">
-                    <h4>Chi tiết đơn hàng</h4>
-                    <div>Mã đơn: <strong>{{ selected.order.id }}</strong> - Địa chỉ: <span>{{ selected.order.address }}</span></div>
-                    <div style="margin-top:12px;">
-                        <div class="form-group">
-                            <label>Trạng thái đơn hàng</label>
-                            <select v-model="status">
-                                <option value="PLACED_UNPAID">Đã đặt - chưa TT</option>
-                                <option value="PLACED_PAID">Đã đặt - đã TT</option>
-                                <option value="SHIPPING_UNPAID">Đang giao - chưa TT</option>
-                                <option value="SHIPPING_PAID">Đang giao - đã TT</option>
-                                <option value="DELIVERED_SUCCESS">Giao thành công</option>
-                                <option value="DELIVERY_FAILED">Giao thất bại</option>
-                            </select>
-                        </div>
-                        <button class="btn btn-primary" type="button" @click="updateStatus">Cập nhật trạng thái</button>
-                    </div>
-                    <table style="margin-top:10px;">
-                        <thead>
-                        <tr>
-                            <th>Sản phẩm</th>
-                            <th>Giá</th>
-                            <th>SL</th>
-                            <th>Size</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr v-for="d in (selected.details || [])" :key="d.id">
-                            <td>{{ d.product?.name }}</td>
-                            <td>{{ d.price }}</td>
-                            <td>{{ d.quantity }}</td>
-                            <td>{{ d.sizeName }}</td>
-                        </tr>
-                        </tbody>
-                    </table>
+            </div>
+        </div>
+        <div class="modal-backdrop" :class="{open: detailModalOpen}" v-if="detailModalOpen && selected">
+            <div class="admin-modal-panel">
+                <div class="table-actions" style="justify-content: space-between; margin-bottom: 8px;">
+                    <h4 style="margin:0;">Chi tiết đơn hàng</h4>
+                    <button class="btn btn-outline-primary" type="button" @click="closeDetailModal">Đóng</button>
                 </div>
-                <div class="card" v-if="selected">
+                <div>Mã đơn: <strong>{{ selected.order.id }}</strong> - Địa chỉ: <span>{{ selected.order.address }}</span></div>
+                <div style="margin-top:12px;">
+                    <div class="form-group">
+                        <label>Trạng thái đơn hàng</label>
+                        <select v-model="status">
+                            <option v-for="item in statusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" type="button" @click="updateStatus" v-if="canUpdateStatus">
+                        Cập nhật trạng thái
+                    </button>
+                </div>
+                <table style="margin-top:10px;">
+                    <thead>
+                    <tr>
+                        <th>Sản phẩm</th>
+                        <th>Giá</th>
+                        <th>SL</th>
+                        <th>Size</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr v-for="d in (selected.details || [])" :key="d.id">
+                        <td>{{ d.product?.name }}</td>
+                        <td>{{ d.price }}</td>
+                        <td>{{ d.quantity }}</td>
+                        <td>{{ d.sizeName }}</td>
+                    </tr>
+                    </tbody>
+                </table>
+                <div class="card" style="margin-top:12px;">
                     <h4>Bản đồ giao hàng</h4>
                     <div ref="mapRef" style="height:360px;"></div>
                 </div>

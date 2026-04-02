@@ -3,13 +3,34 @@ import {computed, onMounted, reactive, ref, watch} from "vue";
 import {useRoute} from "vue-router";
 import {OrderDetailPage} from "@/legacy/pages";
 import {api} from "@/api";
+import router from "@/router";
 
-const {orderId, data, payos, error, load, checkPayos, money} = OrderDetailPage.setup();
+const {orderId, data, error, load, money} = OrderDetailPage.setup();
 const route = useRoute();
 const reviewForms = reactive({});
 const reviewMessage = ref("");
 const reviewedSet = computed(() => new Set(data.value?.reviewedProductIds || []));
 const isReviewable = computed(() => !!data.value?.reviewable);
+const expectedDeliveryDate = computed(() => {
+    const base = new Date();
+    base.setDate(base.getDate() + 3);
+    return base.toLocaleDateString("vi-VN");
+});
+const formatOrderDateTime = (value) => {
+    if (!value) {
+        return "";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const yyyy = date.getFullYear();
+    const hh = String(date.getHours()).padStart(2, "0");
+    const min = String(date.getMinutes()).padStart(2, "0");
+    return `${dd}/${mm}/${yyyy} - ${hh}:${min}`;
+};
 const reviewKey = (detail) => String(detail.product?.id || detail.productId || "");
 const ensureReviewForm = (detail) => {
     const key = reviewKey(detail);
@@ -43,6 +64,19 @@ const submitReview = async (detail) => {
         reviewMessage.value = e.message;
     }
 };
+const buyAgain = async (detail) => {
+    const productId = detail.product?.id || detail.productId;
+    const sizeId = detail.sizeId;
+    const quantity = Number(detail.quantity || 1);
+    if (!productId || !sizeId) {
+        return;
+    }
+    try {
+        await api.cart.addDetail(productId, sizeId, quantity > 0 ? quantity : 1);
+    } catch (e) {
+    }
+    await router.push(`/product/detail?id=${productId}`);
+};
 const statusLabel = (status) => {
     const map = {
         PLACED_PAID: "Đã đặt - đã TT",
@@ -75,19 +109,13 @@ watch(() => route.query.orderId, initOrderByQuery);
 <template>
     <main class="container page-shell">
         <h3 class="page-title">Chi tiết đơn hàng</h3>
-        <div class="row g-2 mb-3">
-            <div class="col-md-3"><input v-model="orderId" class="form-control" placeholder="orderId"></div>
-            <div class="col-md-2"><button class="btn btn-primary w-100" @click="load">Tải</button></div>
-            <div class="col-md-2"><button class="btn btn-outline-secondary w-100" @click="checkPayos">Kiểm tra PayOS</button></div>
-        </div>
         <div v-if="error" class="status-message">{{ error }}</div>
         <div class="card order-detail-summary" v-if="data">
-            <div>
-                Mã đơn: <strong>{{ data.order?.id }}</strong>
-                - Ngày: <span>{{ data.order?.createDate }}</span>
-                - Trạng thái: <span class="badge">{{ statusLabel(data.order?.status) }}</span>
-            </div>
-            <div>Địa chỉ: <span>{{ data.order?.address }}</span></div>
+            <div class="order-detail-line">Mã đơn: <strong>{{ data.order?.id }}</strong></div>
+            <div class="order-detail-line">Ngày đặt: <span>{{ formatOrderDateTime(data.order?.createDate) }}</span></div>
+            <div class="order-detail-line">Trạng thái: <span class="badge order-status-badge">{{ statusLabel(data.order?.status) }}</span></div>
+            <div class="order-detail-line">Địa chỉ: <span>{{ data.order?.address }}</span></div>
+            <div class="order-detail-line">Ngày nhận hàng dự kiến: <strong>{{ expectedDeliveryDate }}</strong></div>
         </div>
         <div v-if="reviewMessage" class="status-message">{{ reviewMessage }}</div>
         <h4 class="page-title">Sản phẩm</h4>
@@ -99,11 +127,11 @@ watch(() => route.query.orderId, initOrderByQuery);
                 <tbody>
                 <template v-for="d in (data.details||[])" :key="d.id">
                     <tr>
-                        <td><router-link :to="'/product/detail?id=' + (d.product?.id || '')">{{ d.product?.name || d.productName }}</router-link></td>
+                        <td><router-link class="order-detail-product-link" :to="'/product/detail?id=' + (d.product?.id || '')">{{ d.product?.name || d.productName }}</router-link></td>
                         <td>{{ money(d.price) }} VNĐ</td>
                         <td>{{ d.quantity }}</td>
                         <td>{{ d.sizeName }}</td>
-                        <td><router-link class="btn btn-outline" :to="'/cart/index'">Mua lại</router-link></td>
+                        <td><button class="btn btn-outline" type="button" @click="buyAgain(d)">Mua lại</button></td>
                     </tr>
                     <tr>
                         <td colspan="5">
@@ -138,6 +166,5 @@ watch(() => route.query.orderId, initOrderByQuery);
                 </tbody>
             </table>
         </div>
-        <div v-if="payos" class="status-message">{{ payos.status || payos.message }}</div>
     </main>
 </template>
