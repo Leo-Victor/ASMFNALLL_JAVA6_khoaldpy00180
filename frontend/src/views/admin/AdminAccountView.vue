@@ -1,20 +1,22 @@
 <script setup>
+import {computed} from "vue";
 import {AdminAccountPage} from "@/legacy/pages";
+import {useAuth} from "@/legacy/pages";
 import AdminNav from "@/components/AdminNav.vue";
 
 const {rows, roles, form, modalOpen, editing, msg, edit, openCreate, closeModal, onPhotoChange, save, remove} = AdminAccountPage.setup();
+const {state} = useAuth();
+const currentUsername = computed(() => state.me?.username || "");
 </script>
 
 <template>
-    <main class="container admin-layout">
+    <main class="container admin-product-page">
         <h3 class="page-title">Quản lý tài khoản</h3>
-        <div class="admin-sidebar">
-            <AdminNav/>
-        </div>
-        <div class="admin-content">
-            <div class="table-actions" style="margin-bottom: 12px;">
-                <button class="btn btn-primary" type="button" @click="openCreate">Thêm tài khoản</button>
+        <div class="admin-product-shell">
+            <div class="admin-product-menu">
+                <AdminNav/>
             </div>
+            <div class="admin-product-main">
             <div class="modal-backdrop" :class="{open: modalOpen}" v-if="modalOpen">
                 <div class="admin-modal-panel">
                     <form @submit.prevent="save">
@@ -72,8 +74,16 @@ const {rows, roles, form, modalOpen, editing, msg, edit, openCreate, closeModal,
                 </div>
             </div>
             <div class="status-message" v-if="msg">{{ msg }}</div>
-            <div class="card">
-                <h4>Danh sách tài khoản</h4>
+            <div class="card admin-product-list">
+                <div class="admin-product-list-header">
+                    <h4>Danh sách tài khoản</h4>
+                    <button class="btn btn-primary btn-add" type="button" @click="openCreate">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M8 1V15M1 8H15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        Thêm tài khoản
+                    </button>
+                </div>
                 <table>
                     <thead>
                     <tr>
@@ -96,12 +106,13 @@ const {rows, roles, form, modalOpen, editing, msg, edit, openCreate, closeModal,
                         <td>{{ u.roleId === "ADMIN" ? "Quản trị viên" : "Người dùng" }}</td>
                         <td class="table-actions">
                             <button class="btn btn-action-outline" type="button" @click="edit(u.username)">Sửa</button>
-                            <button class="btn btn-action-solid" type="button" @click="remove(u.username)">Xoá</button>
+                            <button class="btn btn-action-solid" type="button" v-if="u.username !== currentUsername" @click="remove(u.username)">Xoá</button>
                         </td>
                     </tr>
                     </tbody>
                 </table>
             </div>
+        </div>
         </div>
     </main>
 </template>

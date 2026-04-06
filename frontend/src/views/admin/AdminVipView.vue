@@ -7,13 +7,14 @@ const date = (value) => value ? new Date(value).toLocaleDateString("vi-VN") : ""
 </script>
 
 <template>
-    <main class="container admin-layout">
+    <main class="container admin-product-page">
         <h3 class="page-title">Top 10 khách hàng VIP</h3>
-        <div class="admin-sidebar">
-            <AdminNav/>
-        </div>
-        <div class="admin-content">
-            <div class="card">
+        <div class="admin-product-shell">
+            <div class="admin-product-menu">
+                <AdminNav/>
+            </div>
+            <div class="admin-product-main">
+                <div class="card">
                 <table>
                     <thead>
                     <tr>
@@ -33,6 +34,7 @@ const date = (value) => value ? new Date(value).toLocaleDateString("vi-VN") : ""
                     </tbody>
                 </table>
             </div>
+        </div>
         </div>
     </main>
 </template>

@@ -4,7 +4,7 @@
 body {
     background: #fafafa;
     color: #1a1a1a;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
     font-size: 15px;
     line-height: 1.6;
     letter-spacing: 0.01em;
@@ -67,6 +67,10 @@ h1, h2, h3, h4, h5, h6 {
     background: #ffffff;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     transition: all 0.3s ease;
+}
+
+.card-body {
+    padding: 24px;
 }
 
 .card:hover {
@@ -1448,22 +1452,25 @@ textarea:focus {
 }
 
 .admin-product-shell {
-    display: grid;
-    grid-template-columns: 240px 1fr 300px;
+    display: flex;
     gap: 24px;
-    align-items: start;
+    align-items: flex-start;
 }
 
 .admin-product-menu {
+    flex: 0 0 240px;
     position: sticky;
     top: 100px;
 }
 
 .admin-product-main {
+    flex: 1;
+    min-width: 0;
     min-height: 400px;
 }
 
 .admin-product-filter {
+    flex: 0 0 300px;
     position: sticky;
     top: 100px;
 }
@@ -1670,11 +1677,13 @@ textarea:focus {
     }
     
     .admin-product-shell {
-        grid-template-columns: 1fr;
+        flex-direction: column;
     }
     
     .admin-product-menu,
     .admin-product-filter {
+        flex: none;
+        width: 100%;
         position: static;
     }
     

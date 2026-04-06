@@ -322,13 +322,14 @@ function describePieArc(cx, cy, r, startAngle, endAngle) {
 </script>
 
 <template>
-    <main class="container admin-layout">
+    <main class="container admin-product-page">
         <h3 class="page-title">Báo cáo doanh thu</h3>
-        <div class="admin-sidebar">
-            <AdminNav/>
-        </div>
-        <div class="admin-content">
-            <div class="revenue-title">BẢNG DOANH THU BÁN HÀNG</div>
+        <div class="admin-product-shell">
+            <div class="admin-product-menu">
+                <AdminNav/>
+            </div>
+            <div class="admin-product-main">
+                <div class="revenue-title">BẢNG DOANH THU BÁN HÀNG</div>
             <h4 class="revenue-subtitle">{{ modeTitle }}</h4>
             <form class="card revenue-filter" @submit.prevent="applyFilters" v-if="isSummaryMode">
                 <div class="form-group">
@@ -507,6 +508,7 @@ function describePieArc(cx, cy, r, startAngle, endAngle) {
                     </tfoot>
                 </table>
             </div>
+        </div>
         </div>
     </main>
 </template>

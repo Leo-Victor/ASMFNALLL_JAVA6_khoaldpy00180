@@ -74,12 +74,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <main class="container admin-layout">
+    <main class="container admin-product-page">
         <h3 class="page-title">Camera cửa hàng</h3>
-        <div class="admin-sidebar">
-            <AdminNav/>
-        </div>
-        <div class="admin-content">
+        <div class="admin-product-shell">
+            <div class="admin-product-menu">
+                <AdminNav/>
+            </div>
+            <div class="admin-product-main">
             <section class="two-column camera-grid">
                 <div class="card">
                     <div class="camera-card-header">
@@ -104,6 +105,7 @@ onUnmounted(() => {
             <div class="table-actions" style="margin-top:12px;">
                 <button class="btn btn-primary" type="button" @click="load">Làm mới</button>
             </div>
+        </div>
         </div>
     </main>
 </template>

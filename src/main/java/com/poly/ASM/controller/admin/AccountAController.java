@@ -8,6 +8,7 @@ import com.poly.ASM.exception.ApiException;
 import com.poly.ASM.service.user.AccountService;
 import com.poly.ASM.service.user.AuthorityService;
 import com.poly.ASM.service.user.RoleService;
+import com.poly.ASM.service.auth.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +41,7 @@ public class AccountAController {
     private final RoleService roleService;
     private final AuthorityService authorityService;
     private final PasswordEncoder passwordEncoder;
+    private final AuthService authService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<?>> index() {
@@ -146,6 +148,11 @@ public class AccountAController {
 
     @DeleteMapping("/{username}")
     public ResponseEntity<ApiResponse<?>> delete(@PathVariable("username") String username) {
+        Account currentUser = authService.getUser();
+        if (currentUser != null && currentUser.getUsername().equals(username)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Không thể xóa tài khoản đang đăng nhập");
+        }
+
         Account account = accountService.findByUsername(username)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản"));
         if (Boolean.TRUE.equals(account.getIsDelete())) {

@@ -1,11 +1,12 @@
 <script setup>
 import {computed, onMounted, ref, watch} from "vue";
-import {useRoute} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import {ProductDetailPage} from "@/legacy/pages";
 import {api} from "@/api";
 
 const {productId, data, error, load, money} = ProductDetailPage.setup();
 const route = useRoute();
+const router = useRouter();
 const loadByQuery = async () => {
     if (typeof window !== "undefined") {
         window.scrollTo({top: 0, left: 0, behavior: "auto"});
@@ -64,6 +65,18 @@ const addToCart = async () => {
         actionMessage.value = e.message;
     }
 };
+const checkoutNow = async () => {
+    if (!selectedSizeId.value) {
+        actionMessage.value = "Vui lòng chọn size trước khi thanh toán.";
+        return;
+    }
+    try {
+        await api.cart.addDetail(data.value.product.id, selectedSizeId.value, quantity.value);
+        router.push("/order/check-out");
+    } catch (e) {
+        actionMessage.value = e.message;
+    }
+};
 </script>
 
 <template>
@@ -114,7 +127,7 @@ const addToCart = async () => {
                     
                     <div class="detail-actions">
                         <button class="btn btn-primary" type="button" @click="addToCart">Thêm vào giỏ hàng</button>
-                        <router-link class="btn btn-outline-primary" to="/cart/index">Xem giỏ hàng</router-link>
+                        <button class="btn btn-outline-primary" type="button" @click="checkoutNow">Thanh toán ngay</button>
                     </div>
                 </div>
             </section>
