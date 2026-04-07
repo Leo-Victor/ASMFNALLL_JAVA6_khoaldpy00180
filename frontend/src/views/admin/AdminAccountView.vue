@@ -28,8 +28,8 @@ const currentUsername = computed(() => state.me?.username || "");
                         Thêm tài khoản
                     </button>
                 </div>
-                <div style="overflow-x: auto;">
-                    <table style="min-width: 800px;">
+                <div style="overflow-x: auto; width: 100%;">
+                    <table style="min-width: 1000px; width: 100%; white-space: nowrap;">
                         <thead>
                         <tr>
                             <th>Username</th>
@@ -38,7 +38,7 @@ const currentUsername = computed(() => state.me?.username || "");
                             <th>Số điện thoại</th>
                             <th>Địa chỉ</th>
                             <th>Vai trò</th>
-                            <th></th>
+                            <th style="width: 150px; text-align: center;">Thao tác</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -47,9 +47,9 @@ const currentUsername = computed(() => state.me?.username || "");
                             <td>{{ u.fullname }}</td>
                             <td>{{ u.email }}</td>
                             <td>{{ u.phone }}</td>
-                            <td>{{ u.address }}</td>
+                            <td style="white-space: normal; min-width: 200px;">{{ u.address }}</td>
                             <td>{{ u.roleId === "ADMIN" ? "Quản trị viên" : "Người dùng" }}</td>
-                            <td class="table-actions">
+                            <td class="table-actions" style="justify-content: center;">
                                 <button class="btn btn-action-outline" type="button" @click="edit(u.username)">Sửa</button>
                                 <button class="btn btn-action-solid" type="button" v-if="u.username !== currentUsername" @click="remove(u.username)">Xoá</button>
                             </td>
