@@ -6,6 +6,7 @@ import com.poly.ASM.entity.order.OrderDetail;
 import com.poly.ASM.entity.product.Product;
 import com.poly.ASM.entity.product.ProductSize;
 import com.poly.ASM.entity.user.Account;
+import com.poly.ASM.repository.cart.CartItemRepository;
 import com.poly.ASM.service.auth.AuthService;
 import com.poly.ASM.service.cart.CartItem;
 import com.poly.ASM.service.cart.CartService;
@@ -61,6 +62,7 @@ public class OrderController {
     private final NotificationService notificationService;
     private final PayosPaymentService payosPaymentService;
     private final JdbcTemplate jdbcTemplate;
+    private final CartItemRepository cartItemRepository;
 
     @GetMapping("/checkout")
     public ResponseEntity<ApiResponse<?>> checkoutForm() {
@@ -103,7 +105,7 @@ public class OrderController {
         Order order = new Order();
         order.setAccount(user);
         order.setAddress(address);
-        order.setStatus("BANK".equalsIgnoreCase(paymentMethod) ? "PLACED_UNPAID" : "PLACED_UNPAID");
+        order.setStatus("BANK".equalsIgnoreCase(paymentMethod) ? "PENDING_PAYMENT" : "PLACED_UNPAID");
         Order savedOrder = orderService.create(order);
         updateOrderCoordinates(savedOrder.getId(), lat, lng);
         notificationService.notifyOrderPlacedForUser(user, savedOrder);
@@ -126,8 +128,15 @@ public class OrderController {
             detail.setSizeId(item.getSizeId());
             detail.setSizeName(item.getSizeName());
             orderDetailService.create(detail);
+            
+            // Deduct inventory when order is placed
+            int currentQty = productSize.get().getQuantity();
+            productSize.get().setQuantity(Math.max(0, currentQty - item.getQuantity()));
+            productSizeService.save(productSize.get());
         }
-        cartService.clearCart();
+        if (!"BANK".equalsIgnoreCase(paymentMethod)) {
+            cartService.clearCart();
+        }
         Map<String, Object> data = new HashMap<>();
         data.put("orderId", savedOrder.getId());
         data.put("nextAction", "BANK".equalsIgnoreCase(paymentMethod) ? "BANK_TRANSFER" : "VIEW_ORDER_DETAIL");
@@ -146,6 +155,13 @@ public class OrderController {
         }
         Order order = orderOpt.get();
         List<OrderDetail> details = orderDetailService.findByOrderId(id);
+        if (!"PENDING_PAYMENT".equals(order.getStatus())) {
+            Map<String, Object> data = new HashMap<>();
+            data.put("order", toOrderData(order));
+            data.put("totalPrice", calculateOrderTotal(details));
+            data.put("status", order.getStatus());
+            return ResponseEntity.ok(ApiResponse.success("Đơn hàng đã được xử lý", data));
+        }
         BigDecimal total = calculateOrderTotal(details);
         long amount = toPayosAmount(total);
         if (amount <= 0) {
@@ -195,7 +211,8 @@ public class OrderController {
                 updateOrderStatusIfChanged(order, "PLACED_PAID");
                 return ResponseEntity.ok(ApiResponse.success("Thanh toán thành công", Map.of("paid", true, "orderId", orderId)));
             }
-        } catch (PayOSException ignored) {
+        } catch (Exception ignored) {
+            // Log lỗi nếu cần thiết
         }
         return ResponseEntity.ok(ApiResponse.success("Thanh toán chưa hoàn tất", Map.of("paid", false, "orderId", orderId)));
     }
@@ -211,8 +228,8 @@ public class OrderController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Không có quyền truy cập đơn hàng", null));
         }
         try {
-            payosPaymentService.cancelPaymentLink(orderId, "Switch to COD");
-        } catch (PayOSException ignored) {
+            payosPaymentService.cancelIfPending(orderId, "Switch to COD");
+        } catch (Exception ignored) {
         }
         updateOrderStatusIfChanged(orderOpt.get(), "PLACED_UNPAID");
         return ResponseEntity.ok(ApiResponse.success("Đã chuyển sang COD", Map.of("orderId", orderId)));
@@ -349,7 +366,8 @@ public class OrderController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
         }
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm đã mua thành công", orderDetailService.findByOrderAccountUsername(user.getUsername())));
+        List<OrderDetail> details = orderDetailService.findByOrderAccountUsername(user.getUsername());
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm đã mua thành công", toOrderDetailData(details)));
     }
 
     private boolean isDeliveredStatus(String status) {
@@ -368,7 +386,17 @@ public class OrderController {
             if (detail.getPrice() == null || detail.getQuantity() == null) {
                 continue;
             }
-            total = total.add(detail.getPrice().multiply(BigDecimal.valueOf(detail.getQuantity())));
+            BigDecimal unitPrice = detail.getPrice();
+            BigDecimal qty = BigDecimal.valueOf(detail.getQuantity());
+            BigDecimal discountPercent = detail.getProduct() != null && detail.getProduct().getDiscount() != null
+                    ? detail.getProduct().getDiscount()
+                    : BigDecimal.ZERO;
+            BigDecimal lineTotal = unitPrice.multiply(qty);
+            if (discountPercent.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal discountAmount = lineTotal.multiply(discountPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                lineTotal = lineTotal.subtract(discountAmount);
+            }
+            total = total.add(lineTotal);
         }
         return total;
     }
@@ -461,6 +489,19 @@ public class OrderController {
         order.setStatus(status);
         orderService.update(order);
         notificationService.notifyOrderStatusChange(order, status);
+        
+        if ("PENDING_PAYMENT".equals(previous) && ("PLACED_PAID".equals(status) || "PLACED_UNPAID".equals(status))) {
+            if (order.getAccount() != null) {
+                String username = order.getAccount().getUsername();
+                List<OrderDetail> details = orderDetailService.findByOrderId(order.getId());
+                for (OrderDetail detail : details) {
+                    if (detail.getProduct() != null && detail.getSizeId() != null) {
+                        cartItemRepository.findByAccountUsernameAndProductIdAndSizeId(username, detail.getProduct().getId(), detail.getSizeId())
+                                .ifPresent(cartItemRepository::delete);
+                    }
+                }
+            }
+        }
     }
 
     private void updateOrderCoordinates(Long orderId, Double lat, Double lng) {

@@ -23,22 +23,34 @@ const quantity = ref(1);
 const selectedSizeId = ref("");
 const selectedSizeName = ref("");
 const actionMessage = ref("Vui lòng chọn size và số lượng.");
+const sizeWeight = (name) => {
+    const map = {
+        "XS": 1, "S": 2, "M": 3, "L": 4, "XL": 5, "XXL": 6, "2XL": 6, "3XL": 7, "XXXL": 7
+    };
+    return map[name?.toUpperCase()] || 99;
+};
 const sizeOptions = computed(() => {
     const product = data.value?.product;
+    let opts = [];
     if (!product) {
         return [];
     }
     if (Array.isArray(product.productSizes)) {
-        return product.productSizes.filter((x) => (x.quantity || 0) > 0).map((x) => ({
+        opts = product.productSizes.filter((x) => (x.quantity || 0) > 0).map((x) => ({
             id: x.size?.id || x.sizeId || "",
             name: x.size?.name || x.sizeName || "",
             max: x.quantity || 0
         }));
+    } else if (Array.isArray(product.sizes)) {
+        opts = product.sizes.map((s) => ({id: s.id || s.sizeId || "", name: s.name || s.sizeName || "", max: s.quantity || 999}));
     }
-    if (Array.isArray(product.sizes)) {
-        return product.sizes.map((s) => ({id: s.id || s.sizeId || "", name: s.name || s.sizeName || "", max: s.quantity || 999}));
-    }
-    return [];
+    
+    return opts.sort((a, b) => {
+        const wA = sizeWeight(a.name);
+        const wB = sizeWeight(b.name);
+        if (wA !== wB) return wA - wB;
+        return String(a.name).localeCompare(String(b.name));
+    });
 });
 const chooseSize = (option) => {
     selectedSizeId.value = option.id;
@@ -93,8 +105,10 @@ const checkoutNow = async () => {
                     <h1 class="detail-product-name">{{ data.product.name }}</h1>
                     
                     <div class="price-row">
-                        <span class="price-amount">{{ money(data.product.price) }}</span>
+                        <span class="price-amount">{{ money(data.product.price - (data.product.price * (data.product.discount || 0) / 100)) }}</span>
                         <span class="price-currency">VNĐ</span>
+                        <span class="price-old" style="text-decoration: line-through; color: #999; margin-left: 12px; font-size: 1.2rem;" v-if="data.product.discount > 0">{{ money(data.product.price) }} VNĐ</span>
+                        <span class="badge" style="background: #ef4444; color: white; margin-left: 8px;" v-if="data.product.discount > 0">-{{ data.product.discount }}%</span>
                     </div>
                     
                     <div class="detail-description">
@@ -110,6 +124,12 @@ const checkoutNow = async () => {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                    
+                    <div class="detail-stock-info" v-if="selectedSizeId" style="margin-bottom: 20px; font-size: 14px; color: #666;">
+                        <span v-for="opt in sizeOptions" :key="opt.id" v-show="opt.id === selectedSizeId">
+                            Còn lại: <strong>{{ opt.max || 0 }}</strong> sản phẩm
+                        </span>
                     </div>
                     
                     <div class="qty-control">
@@ -142,10 +162,12 @@ const checkoutNow = async () => {
                         </div>
                     </div>
                     <div v-if="(data.reviews || []).length" class="mt-4">
-                        <div v-for="review in data.reviews" :key="review.id" class="border-top pt-3 mt-3">
+                        <div v-for="review in data.reviews" :key="review.id" class="review-display">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <strong>{{ review.account?.fullname || review.account?.username || "Khách hàng" }}</strong>
-                                <small class="text-muted">{{ review.starRating || 0 }}/5</small>
+                                <span class="stars">
+                                    <span v-for="s in 5" :key="s" :class="s <= (review.starRating || 0) ? 'text-warning' : 'text-muted'">★</span>
+                                </span>
                             </div>
                             <p class="mb-0">{{ review.reviewContent || review.review_content || "Không có nội dung đánh giá." }}</p>
                         </div>

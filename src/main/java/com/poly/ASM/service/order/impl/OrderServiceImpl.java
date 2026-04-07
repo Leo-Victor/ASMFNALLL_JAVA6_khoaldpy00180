@@ -52,11 +52,19 @@ public class OrderServiceImpl implements OrderService {
         String previousStatus = existingOpt.map(Order::getStatus).orElse(null);
         String nextStatus = order.getStatus();
         if (nextStatus != null && !nextStatus.equals(previousStatus)) {
-            if (isDeliveredStatus(nextStatus) && !isDeliveredStatus(previousStatus)) {
+            // Restore inventory if order is cancelled or delivery failed
+            if ("CANCEL".equals(nextStatus) || "DELIVERY_FAILED".equals(nextStatus)) {
+                adjustInventory(order.getId(), 1);
+            }
+            // Reduce inventory again if re-delivering and succeeded
+            if ("DELIVERED_SUCCESS".equals(nextStatus) && "DELIVERY_FAILED".equals(previousStatus)) {
                 adjustInventory(order.getId(), -1);
             }
-            if (!isDeliveredStatus(nextStatus) && isDeliveredStatus(previousStatus)) {
-                adjustInventory(order.getId(), 1);
+            if ("DELIVERED_SUCCESS".equals(nextStatus) && "CANCEL".equals(previousStatus)) {
+                adjustInventory(order.getId(), -1);
+            }
+            if ("SHIPPING".equals(nextStatus) && ("CANCEL".equals(previousStatus) || "DELIVERY_FAILED".equals(previousStatus))) {
+                adjustInventory(order.getId(), -1);
             }
         }
         return orderRepository.save(order);

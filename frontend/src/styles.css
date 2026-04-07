@@ -1309,7 +1309,64 @@ textarea:focus {
     color: #1a1a1a;
 }
 
-/* ========== FOOTER ========== */
+/* ========== REVIEW BOX ========== */
+.review-box {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.star-rating-input {
+    display: inline-flex;
+    gap: 4px;
+    cursor: pointer;
+}
+
+.star-rating-input .star-icon {
+    font-size: 28px;
+    color: #cbd5e1;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.star-rating-input .star-icon:hover {
+    transform: scale(1.1);
+}
+
+.star-rating-input .star-icon.active {
+    color: #f59e0b;
+}
+
+.review-display {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 16px 0;
+}
+
+.review-display:last-child {
+    border-bottom: none;
+}
+
+.review-display .stars {
+    color: #f59e0b;
+    font-size: 16px;
+    letter-spacing: 2px;
+}
+
+.review-images-grid {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.review-image-item {
+    width: 80px;
+    height: 80px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid #e2e8f0;
+}
 .app-footer {
     background: #1a1a1a;
     color: #ffffff;
@@ -1473,8 +1530,9 @@ textarea:focus {
 
 .admin-product-shell {
     display: flex;
-    gap: 24px;
+    gap: 32px;
     align-items: flex-start;
+    justify-content: center;
 }
 
 .admin-product-menu {
@@ -1486,6 +1544,7 @@ textarea:focus {
 .admin-product-main {
     flex: 1;
     min-width: 0;
+    max-width: 1000px;
     min-height: 400px;
 }
 

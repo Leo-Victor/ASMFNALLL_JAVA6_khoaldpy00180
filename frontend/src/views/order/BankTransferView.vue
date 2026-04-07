@@ -1,5 +1,5 @@
 <script setup>
-import {onMounted, onUnmounted, ref} from "vue";
+import {onMounted, onUnmounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {BankTransferPage} from "@/legacy/pages";
 import {api} from "@/api";
@@ -10,6 +10,7 @@ const router = useRouter();
 const paymentMessage = ref("");
 const checkingStatus = ref(false);
 const copiedKey = ref("");
+const cancelModalOpen = ref(false);
 const transferContent = () => String(data.value?.order?.id || orderId.value || "").trim();
 const copyText = async (key, text) => {
     if (!text) {
@@ -31,11 +32,16 @@ const toOrderDetail = async () => {
     if (!orderId.value) {
         return;
     }
-    paymentMessage.value = "Thanh toán thành công. Đang chuyển đến chi tiết đơn hàng...";
+    paymentMessage.value = "Đang chuyển đến chi tiết đơn hàng...";
     setTimeout(() => {
         router.push(`/order/order-detail?id=${orderId.value}`);
     }, 600);
 };
+watch(() => data.value?.status, (newStatus) => {
+    if (newStatus && newStatus !== "PENDING_PAYMENT") {
+        toOrderDetail();
+    }
+});
 const pollPayos = async () => {
     if (!orderId.value || !data.value?.checkoutUrl) {
         return;
@@ -57,7 +63,6 @@ const confirm = async () => {
             await toOrderDetail();
             return;
         }
-        await legacyConfirm();
         paymentMessage.value = "Hệ thống chưa ghi nhận thanh toán, vui lòng kiểm tra lại sau ít phút.";
     } catch (e) {
         paymentMessage.value = e.message || "Không kiểm tra được trạng thái thanh toán.";
@@ -65,6 +70,19 @@ const confirm = async () => {
         checkingStatus.value = false;
     }
 };
+const handleRemove = async () => {
+    try {
+        await remove();
+        cancelModalOpen.value = true;
+    } catch (e) {
+        paymentMessage.value = e.message || "Hủy thanh toán thất bại.";
+    }
+};
+
+const goHome = () => {
+    router.push("/");
+};
+
 onMounted(() => {
     const queryId = Number(route.query.id || route.query.orderId || "");
     if (Number.isFinite(queryId) && queryId > 0) {
@@ -83,10 +101,6 @@ onUnmounted(() => {
 <template>
     <main class="container page-shell">
         <h3 class="page-title">Thanh toán chuyển khoản ngân hàng</h3>
-        <div class="row g-2 mb-3">
-            <div class="col-md-3"><input v-model="orderId" class="form-control" placeholder="orderId"></div>
-            <div class="col-md-2"><button class="btn btn-primary w-100" @click="load">Tải</button></div>
-        </div>
         <div v-if="error" class="status-message status-error">{{ error }}</div>
         <div v-if="paymentMessage" class="status-message">{{ paymentMessage }}</div>
         <div v-if="data" class="card transfer-sheet">
@@ -97,7 +111,7 @@ onUnmounted(() => {
                 <div class="transfer-qr-panel">
                     <div class="transfer-qr-head">QR Thanh Toán</div>
                     <img v-if="data.qrImageSrc" :src="data.qrImageSrc" alt="QR chuyển khoản" class="transfer-qr-image">
-                    <div v-else class="status-message">Không thể tải mã QR, vui lòng dùng nút PayOS bên dưới.</div>
+                    <div v-else class="status-message">Không thể tải mã QR, vui lòng chuyển khoản theo thông tin bên dưới.</div>
                     <div class="transfer-qr-bank">{{ data.bankName || "Ngân hàng" }}</div>
                 </div>
                 <div class="transfer-info-panel">
@@ -139,10 +153,27 @@ onUnmounted(() => {
                 </div>
             </div>
             <div class="transfer-actions">
-                <a class="btn" v-if="data.checkoutUrl" :href="data.checkoutUrl" target="_blank" rel="noopener">Thanh toán qua PayOS</a>
                 <button class="btn btn-outline" type="button" :disabled="checkingStatus" @click="confirm">{{ checkingStatus ? "Đang kiểm tra..." : "Kiểm tra trạng thái" }}</button>
                 <button class="btn btn-outline" type="button" @click="toCod">Chuyển sang COD</button>
-                <button class="btn btn-outline" type="button" @click="remove">Hủy thanh toán</button>
+                <button class="btn btn-outline" type="button" @click="handleRemove">Hủy thanh toán</button>
+            </div>
+        </div>
+
+        <!-- Cancel Success Modal -->
+        <div class="modal-backdrop" :class="{open: cancelModalOpen}" v-if="cancelModalOpen">
+            <div class="admin-modal-panel" style="max-width: 400px; text-align: center;">
+                <div class="modal-header" style="justify-content: center; border-bottom: none; padding-bottom: 0;">
+                    <div style="width: 60px; height: 60px; background: #e8f5e9; color: #4caf50; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto;">
+                        ✓
+                    </div>
+                </div>
+                <div style="padding: 20px 0;">
+                    <h4 style="margin-bottom: 10px;">Đã hủy thanh toán</h4>
+                    <p style="color: #666; font-size: 15px;">Đơn hàng của bạn đã được hủy thành công.</p>
+                </div>
+                <div class="admin-form-actions" style="justify-content: center;">
+                    <button class="btn btn-primary" type="button" @click="goHome">Về trang chủ</button>
+                </div>
             </div>
         </div>
     </main>

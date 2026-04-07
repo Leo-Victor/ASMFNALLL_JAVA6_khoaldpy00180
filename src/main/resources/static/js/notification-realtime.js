@@ -46,8 +46,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     });
                 }
                 this.notifications.unshift(next);
-                if (this.notifications.length > 8) {
-                    this.notifications = this.notifications.slice(0, 8);
+                if (this.notifications.length > 100) {
+                    this.notifications = this.notifications.slice(0, 100);
                 }
             }
         },

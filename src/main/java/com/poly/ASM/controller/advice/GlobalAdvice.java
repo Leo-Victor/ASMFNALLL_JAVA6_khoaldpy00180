@@ -57,7 +57,7 @@ public class GlobalAdvice {
         if (user == null) {
             return java.util.List.of();
         }
-        return notificationService.getLatest(user.getUsername(), 8);
+        return notificationService.getLatest(user.getUsername(), 100);
     }
 
     @ModelAttribute("cartDistinctCount")

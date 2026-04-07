@@ -116,6 +116,9 @@ public class OrderAController {
         if (currentStatus == null || nextStatus == null || nextStatus.isBlank()) {
             return false;
         }
+        if ("PENDING_PAYMENT".equals(currentStatus)) {
+            return "PLACED_UNPAID".equals(nextStatus) || "PLACED_PAID".equals(nextStatus);
+        }
         if ("PLACED_UNPAID".equals(currentStatus)) {
             return "SHIPPING_UNPAID".equals(nextStatus);
         }

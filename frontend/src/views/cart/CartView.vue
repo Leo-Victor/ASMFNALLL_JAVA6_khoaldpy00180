@@ -1,16 +1,37 @@
 <script setup>
 import {CartPage} from "@/legacy/pages";
+import {ref} from "vue";
 
 const {state, error, loading, updateItem, removeItem, clear, money} = CartPage.setup();
+
+const updating = ref({});
+
 const minus = async (item) => {
+    const key = item.productId + '-' + item.sizeId;
+    if (updating.value[key]) return;
+    
     if ((item.quantity || 1) > 1) {
-        item.quantity -= 1;
-        await updateItem(item);
+        updating.value[key] = true;
+        try {
+            item.quantity -= 1;
+            await updateItem(item);
+        } finally {
+            updating.value[key] = false;
+        }
     }
 };
+
 const plus = async (item) => {
-    item.quantity = (item.quantity || 0) + 1;
-    await updateItem(item);
+    const key = item.productId + '-' + item.sizeId;
+    if (updating.value[key]) return;
+    
+    updating.value[key] = true;
+    try {
+        item.quantity = (item.quantity || 0) + 1;
+        await updateItem(item);
+    } finally {
+        updating.value[key] = false;
+    }
 };
 </script>
 
@@ -52,9 +73,9 @@ const plus = async (item) => {
                                 <td>{{ money(item.price) }} VNĐ</td>
                                 <td>
                                     <div class="cart-item-qty-form">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="minus(item)">-</button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="minus(item)" :disabled="updating[item.productId + '-' + item.sizeId]">-</button>
                                         <input type="number" min="1" v-model.number="item.quantity" class="cart-item-qty-input" @change="updateItem(item)">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="plus(item)">+</button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="plus(item)" :disabled="updating[item.productId + '-' + item.sizeId]">+</button>
                                     </div>
                                 </td>
                                 <td>{{ item.sizeName }}</td>

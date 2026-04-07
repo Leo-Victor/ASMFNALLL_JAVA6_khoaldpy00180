@@ -1,6 +1,7 @@
 <script setup>
 import {HomePage} from "@/legacy/pages";
-import {ref, onMounted, onUnmounted, nextTick} from "vue";
+import {ref, onMounted, onUnmounted, nextTick, watch} from "vue";
+import {useRoute, useRouter} from "vue-router";
 
 const {filter, data, loading, error, load, productCard} = HomePage.setup();
 const money = (value) => Number(value || 0).toLocaleString("vi-VN");
@@ -11,6 +12,30 @@ const finalPrice = (product) => {
     const percent = discountPercent(product);
     return Math.max(0, price - (price * percent / 100));
 };
+
+const route = useRoute();
+const router = useRouter();
+
+// Restore filter state from URL on mount
+onMounted(() => {
+    if (route.query.keyword) filter.keyword = route.query.keyword;
+    if (route.query.categoryId) filter.categoryId = route.query.categoryId;
+    if (route.query.sort) filter.sort = route.query.sort;
+    if (route.query.page) filter.page = Number(route.query.page);
+    load();
+});
+
+// Update URL when filter changes
+watch(filter, (newFilter) => {
+    const query = {};
+    if (newFilter.keyword) query.keyword = newFilter.keyword;
+    if (newFilter.categoryId) query.categoryId = newFilter.categoryId;
+    if (newFilter.sort) query.sort = newFilter.sort;
+    if (newFilter.page > 0) query.page = newFilter.page;
+    
+    router.replace({ query }).catch(() => {});
+}, { deep: true });
+
 const resultsAnchor = ref(null);
 const scrollToResults = async () => {
     await nextTick();
@@ -182,6 +207,7 @@ onUnmounted(() => {
                                     <div v-if="hasDiscount(p)" class="product-card__price-old">{{ money(p.price) }} VNĐ</div>
                                 </div>
                                 <div v-if="hasDiscount(p)" class="product-card__discount-badge">-{{ discountPercent(p) }}%</div>
+                                <div class="product-card__stock" style="font-size: 12px; color: #666; margin-top: 4px;">Kho: {{ p.quantity || 0 }}</div>
                             </div>
                             <div class="product-card__actions">
                                 <router-link class="btn btn-primary btn--sm btn--block" :to="'/product/detail?id=' + p.id">Xem chi tiết</router-link>

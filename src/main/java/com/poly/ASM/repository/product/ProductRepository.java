@@ -56,8 +56,8 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
                or lower(c.name) like lower(concat('%', :keyword, '%')))
               and p.isDelete = false
               and (:categoryId is null or :categoryId = '' or c.id = :categoryId)
-              and (:minPrice is null or p.price >= :minPrice)
-              and (:maxPrice is null or p.price <= :maxPrice)
+              and (:minPrice is null or (p.price - (p.price * coalesce(p.discount, 0) / 100.0)) >= :minPrice)
+              and (:maxPrice is null or (p.price - (p.price * coalesce(p.discount, 0) / 100.0)) <= :maxPrice)
             """)
     List<Product> search(@Param("keyword") String keyword,
                          @Param("categoryId") String categoryId,
@@ -72,8 +72,8 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
                or lower(c.name) like lower(concat('%', :keyword, '%')))
               and p.isDelete = false
               and (:categoryId is null or :categoryId = '' or c.id = :categoryId)
-              and (:minPrice is null or p.price >= :minPrice)
-              and (:maxPrice is null or p.price <= :maxPrice)
+              and (:minPrice is null or (p.price - (p.price * coalesce(p.discount, 0) / 100.0)) >= :minPrice)
+              and (:maxPrice is null or (p.price - (p.price * coalesce(p.discount, 0) / 100.0)) <= :maxPrice)
             """, countQuery = """
             select count(p)
             from Product p
@@ -82,8 +82,8 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
                or lower(c.name) like lower(concat('%', :keyword, '%')))
               and p.isDelete = false
               and (:categoryId is null or :categoryId = '' or c.id = :categoryId)
-              and (:minPrice is null or p.price >= :minPrice)
-              and (:maxPrice is null or p.price <= :maxPrice)
+              and (:minPrice is null or (p.price - (p.price * coalesce(p.discount, 0) / 100.0)) >= :minPrice)
+              and (:maxPrice is null or (p.price - (p.price * coalesce(p.discount, 0) / 100.0)) <= :maxPrice)
             """)
     Page<Product> searchPage(@Param("keyword") String keyword,
                              @Param("categoryId") String categoryId,
@@ -99,9 +99,9 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
                or lower(c.name) like lower(concat('%', :keyword, '%')))
               and p.isDelete = false
               and (:categoryId is null or :categoryId = '' or c.id = :categoryId)
-              and (:minPrice is null or p.price >= :minPrice)
-              and (:maxPrice is null or p.price <= :maxPrice)
-            order by p.price asc
+              and (:minPrice is null or (p.price - (p.price * coalesce(p.discount, 0) / 100.0)) >= :minPrice)
+              and (:maxPrice is null or (p.price - (p.price * coalesce(p.discount, 0) / 100.0)) <= :maxPrice)
+            order by (p.price - (p.price * coalesce(p.discount, 0) / 100.0)) asc
             """)
     List<Product> searchOrderByPriceAsc(@Param("keyword") String keyword,
                                         @Param("categoryId") String categoryId,
@@ -116,9 +116,9 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
                or lower(c.name) like lower(concat('%', :keyword, '%')))
               and p.isDelete = false
               and (:categoryId is null or :categoryId = '' or c.id = :categoryId)
-              and (:minPrice is null or p.price >= :minPrice)
-              and (:maxPrice is null or p.price <= :maxPrice)
-            order by p.price desc
+              and (:minPrice is null or (p.price - (p.price * coalesce(p.discount, 0) / 100.0)) >= :minPrice)
+              and (:maxPrice is null or (p.price - (p.price * coalesce(p.discount, 0) / 100.0)) <= :maxPrice)
+            order by (p.price - (p.price * coalesce(p.discount, 0) / 100.0)) desc
             """)
     List<Product> searchOrderByPriceDesc(@Param("keyword") String keyword,
                                          @Param("categoryId") String categoryId,

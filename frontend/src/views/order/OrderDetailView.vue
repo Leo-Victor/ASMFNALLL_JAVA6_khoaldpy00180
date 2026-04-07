@@ -39,6 +39,10 @@ const ensureReviewForm = (detail) => {
     }
     return reviewForms[key];
 };
+const setReviewStar = (detail, star) => {
+    const form = ensureReviewForm(detail);
+    form.starRating = star;
+};
 const onReviewImagesChange = (detail, event) => {
     const form = ensureReviewForm(detail);
     form.images = Array.from(event.target.files || []);
@@ -123,53 +127,68 @@ watch(() => route.query.orderId, initOrderByQuery);
         <h4 class="section-title" style="margin-top: 2rem;">Sản phẩm</h4>
         <div class="card" v-if="data">
             <div class="card-body">
-                <table>
-                    <thead>
-                    <tr><th>Sản phẩm</th><th>Giá</th><th>Số lượng</th><th>Size</th><th></th></tr>
-                    </thead>
-                    <tbody>
-                    <template v-for="d in (data.details||[])" :key="d.id">
-                        <tr>
-                            <td><router-link class="order-detail-product-link" :to="'/product/detail?id=' + (d.product?.id || '')">{{ d.product?.name || d.productName }}</router-link></td>
-                            <td>{{ money(d.price) }} VNĐ</td>
-                            <td>{{ d.quantity }}</td>
-                            <td>{{ d.sizeName }}</td>
-                            <td><button class="btn btn-outline" type="button" @click="buyAgain(d)">Mua lại</button></td>
-                        </tr>
+                <div style="overflow-x: auto;">
+                    <table style="min-width: 600px;">
+                        <thead>
+                        <tr><th>Sản phẩm</th><th>Giá gốc</th><th>Giá mua</th><th>Số lượng</th><th>Size</th><th>Thành tiền</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                        <template v-for="d in (data.details||[])" :key="d.id">
+                            <tr>
+                                <td><router-link class="order-detail-product-link" :to="'/product/detail?id=' + (d.product?.id || '')">{{ d.product?.name || d.productName }}</router-link></td>
+                                <td style="text-decoration: line-through; color: #999;">{{ money(d.price) }} đ</td>
+                                <td><strong style="color: #d4af37;">{{ money(d.price - (d.price * (d.product?.discount || d.discount || 0) / 100)) }} đ</strong></td>
+                                <td>{{ d.quantity }}</td>
+                                <td>{{ d.sizeName }}</td>
+                                <td><strong>{{ money((d.price - (d.price * (d.product?.discount || d.discount || 0) / 100)) * d.quantity) }} đ</strong></td>
+                                <td><button class="btn btn-outline" type="button" @click="buyAgain(d)">Mua lại</button></td>
+                            </tr>
                     <tr>
-                        <td colspan="5">
-                            <form v-if="isReviewable && !reviewedSet.has(d.product?.id)" class="card" @submit.prevent="submitReview(d)">
-                                <div class="card-body">
-                                    <div class="form-group">
-                                        <label>Đánh giá sao</label>
-                                        <select v-model="ensureReviewForm(d).starRating">
-                                            <option :value="5">5 sao</option>
-                                            <option :value="4">4 sao</option>
-                                            <option :value="3">3 sao</option>
-                                            <option :value="2">2 sao</option>
-                                            <option :value="1">1 sao</option>
-                                        </select>
+                        <td colspan="7">
+                            <div v-if="isReviewable && !reviewedSet.has(d.product?.id)" class="review-box mt-3 mb-3">
+                                <form @submit.prevent="submitReview(d)">
+                                    <h5 class="mb-3">Đánh giá sản phẩm</h5>
+                                    <div class="form-group mb-3">
+                                        <div class="star-rating-input">
+                                            <span 
+                                                v-for="star in 5" 
+                                                :key="star" 
+                                                class="star-icon" 
+                                                :class="{ active: star <= ensureReviewForm(d).starRating }"
+                                                @click="setReviewStar(d, star)"
+                                            >★</span>
+                                        </div>
                                     </div>
-                                    <div class="form-group">
-                                        <label>Nội dung đánh giá</label>
-                                        <textarea v-model="ensureReviewForm(d).reviewContent" rows="3" placeholder="Chia sẻ trải nghiệm của bạn"></textarea>
+                                    <div class="form-group mb-3">
+                                        <textarea v-model="ensureReviewForm(d).reviewContent" class="form-control" rows="3" placeholder="Chia sẻ trải nghiệm của bạn về sản phẩm này..."></textarea>
                                     </div>
-                                    <div class="form-group">
-                                        <label>Ảnh đính kèm</label>
-                                        <input type="file" multiple accept="image/*" @change="onReviewImagesChange(d, $event)">
+                                    <div class="form-group mb-3">
+                                        <label class="form-label text-muted small">Ảnh đính kèm (không bắt buộc)</label>
+                                        <input type="file" class="form-control form-control-sm" multiple accept="image/*" @change="onReviewImagesChange(d, $event)">
                                     </div>
-                                    <div class="table-actions">
-                                        <button class="btn" type="submit">Gửi đánh giá</button>
-                                    </div>
-                                </div>
-                            </form>
-                            <div v-else-if="reviewedSet.has(d.product?.id)" class="status-message">Bạn đã đánh giá sản phẩm này.</div>
-                            <div v-else class="status-message">Chỉ được đánh giá khi đơn hàng giao thành công.</div>
+                                    <button type="submit" class="btn btn-primary btn-sm">Gửi đánh giá</button>
+                                </form>
+                            </div>
+                            <div v-else-if="reviewedSet.has(d.product?.id)" class="text-success small fst-italic mt-2 mb-2">
+                                ✓ Bạn đã đánh giá sản phẩm này.
+                            </div>
+                            <div v-else class="text-muted small fst-italic mt-2 mb-2">
+                                Chỉ được đánh giá khi đơn hàng giao thành công.
+                            </div>
                         </td>
                     </tr>
                     </template>
                     </tbody>
                 </table>
+            </div>
+            </div>
+        </div>
+        <div class="card" v-if="data" style="margin-top: 1rem;">
+            <div class="card-body">
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 18px;">
+                    <span>Tổng đơn hàng:</span>
+                    <strong style="font-size: 24px; color: #1a1a1a;">{{ money(data.totalAmount) }} đ</strong>
+                </div>
             </div>
         </div>
     </main>

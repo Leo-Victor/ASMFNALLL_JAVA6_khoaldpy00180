@@ -190,7 +190,17 @@ public class CartServiceImpl implements CartService {
         BigDecimal total = BigDecimal.ZERO;
         for (CartItem item : getCartItems()) {
             if (item.getPrice() != null && item.getQuantity() != null) {
-                total = total.add(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+                BigDecimal unitPrice = item.getPrice();
+                BigDecimal qty = BigDecimal.valueOf(item.getQuantity());
+                BigDecimal discountPercent = item.getDiscount() != null ? item.getDiscount() : BigDecimal.ZERO;
+                
+                BigDecimal lineTotal = unitPrice.multiply(qty);
+                if (discountPercent.compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal discountAmount = lineTotal.multiply(discountPercent).divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                    lineTotal = lineTotal.subtract(discountAmount);
+                }
+                
+                total = total.add(lineTotal);
             }
         }
         return total;
@@ -262,6 +272,7 @@ public class CartServiceImpl implements CartService {
                 sizeId,
                 sizeName,
                 product.getPrice(),
+                product.getDiscount(),
                 quantity,
                 product.getImage()
         );
@@ -282,6 +293,7 @@ public class CartServiceImpl implements CartService {
                     s != null ? s.getId() : null,
                     s != null ? s.getName() : null,
                     p != null ? p.getPrice() : null,
+                    p != null ? p.getDiscount() : null,
                     ci.getQuantity(),
                     p != null ? p.getImage() : null
             ));

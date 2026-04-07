@@ -1,7 +1,24 @@
 <script setup>
 import {MyProductListPage} from "@/legacy/pages";
+import {api} from "@/api";
+import {useRouter} from "vue-router";
 
 const {rows, error, load, money} = MyProductListPage.setup();
+const router = useRouter();
+
+const buyAgain = async (detail) => {
+    const productId = detail.product?.id || detail.productId;
+    const sizeId = detail.sizeId;
+    const quantity = Number(detail.quantity || 1);
+    if (!productId || !sizeId) {
+        return;
+    }
+    try {
+        await api.cart.addDetail(productId, sizeId, quantity > 0 ? quantity : 1);
+    } catch (e) {
+    }
+    await router.push(`/cart/index`);
+};
 </script>
 
 <template>
@@ -19,7 +36,7 @@ const {rows, error, load, money} = MyProductListPage.setup();
                     <td>{{ money(r.price) }} VNĐ</td>
                     <td>{{ r.quantity }}</td>
                     <td>{{ r.sizeName }}</td>
-                    <td><router-link class="btn btn-outline" to="/cart/index">Mua lại</router-link></td>
+                    <td><button class="btn btn-outline" type="button" @click="buyAgain(r)">Mua lại</button></td>
                 </tr>
                 </tbody>
             </table>

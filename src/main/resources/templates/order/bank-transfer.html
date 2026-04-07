@@ -68,7 +68,6 @@
         </details>
 
         <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-            <a class="btn" th:if="${checkoutUrl}" th:href="${checkoutUrl}" target="_blank" rel="noopener">Thanh toán qua PayOS</a>
             <form th:action="@{/order/bank-transfer/confirm}" method="post">
                 <input type="hidden" name="orderId" th:value="${order.id}">
                 <button class="btn btn-outline" type="submit">Kiểm tra trạng thái</button>

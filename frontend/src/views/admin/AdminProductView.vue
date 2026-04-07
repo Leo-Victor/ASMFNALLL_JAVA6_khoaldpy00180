@@ -201,31 +201,33 @@ const clearFilters = async () => {
                     </div>
                     <div class="status-message status-error" v-if="errorMessage">{{ errorMessage }}</div>
                     <div class="status-message status-success" v-if="successMessage || message">{{ successMessage || message }}</div>
-                    <table>
-                        <thead>
-                        <tr>
-                            <th>Ảnh</th>
-                            <th>Tên</th>
-                            <th>Danh mục</th>
-                            <th>Giá (VND)</th>
-                            <th>Số lượng</th>
-                            <th></th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr v-for="product in displayedProducts" :key="product.id">
-                            <td class="product-image-cell"><img class="product-thumb" :src="resolveImage(product.image)" alt="Ảnh sản phẩm"></td>
-                            <td>{{ product.name }}</td>
-                            <td>{{ product.category?.name || product.categoryName || "-" }}</td>
-                            <td>{{ formatCurrency(product.price) }}</td>
-                            <td>{{ product.quantity ?? 0 }}</td>
-                            <td class="table-actions">
-                                <button class="btn btn-action-outline" type="button" @click="openEditModal(product)">Sửa</button>
-                                <button class="btn btn-action-solid" type="button" @click="removeProduct(product)">Xoá</button>
-                            </td>
-                        </tr>
-                        </tbody>
-                    </table>
+                    <div style="overflow-x: auto;">
+                        <table style="min-width: 600px;">
+                            <thead>
+                            <tr>
+                                <th>Ảnh</th>
+                                <th>Tên</th>
+                                <th>Danh mục</th>
+                                <th>Giá (VND)</th>
+                                <th>Số lượng</th>
+                                <th></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr v-for="product in displayedProducts" :key="product.id">
+                                <td class="product-image-cell"><img class="product-thumb" :src="resolveImage(product.image)" alt="Ảnh sản phẩm"></td>
+                                <td>{{ product.name }}</td>
+                                <td>{{ product.category?.name || product.categoryName || "-" }}</td>
+                                <td>{{ formatCurrency(product.price) }}</td>
+                                <td>{{ product.quantity ?? 0 }}</td>
+                                <td class="table-actions">
+                                    <button class="btn btn-action-outline" type="button" @click="openEditModal(product)">Sửa</button>
+                                    <button class="btn btn-action-solid" type="button" @click="removeProduct(product)">Xoá</button>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
             <div class="admin-product-filter">

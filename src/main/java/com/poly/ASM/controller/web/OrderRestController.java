@@ -171,13 +171,25 @@ public class OrderRestController {
                 itemDto.setProductId(detail.getProduct().getId());
                 itemDto.setProductName(detail.getProduct().getName());
             }
-            itemDto.setPrice(detail.getPrice());
+            
+            BigDecimal unitPrice = detail.getPrice();
+            BigDecimal qty = BigDecimal.valueOf(detail.getQuantity() != null ? detail.getQuantity() : 0);
+            BigDecimal discountPercent = detail.getProduct() != null && detail.getProduct().getDiscount() != null
+                    ? detail.getProduct().getDiscount()
+                    : BigDecimal.ZERO;
+            
+            BigDecimal lineTotal = unitPrice.multiply(qty);
+            if (discountPercent.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal discountAmount = lineTotal.multiply(discountPercent).divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                lineTotal = lineTotal.subtract(discountAmount);
+                itemDto.setDiscount(discountPercent);
+            }
+            
+            itemDto.setPrice(unitPrice);
             itemDto.setQuantity(detail.getQuantity());
             itemDtos.add(itemDto);
 
-            if (detail.getPrice() != null && detail.getQuantity() != null) {
-                total = total.add(detail.getPrice().multiply(BigDecimal.valueOf(detail.getQuantity())));
-            }
+            total = total.add(lineTotal);
         }
         dto.setItems(itemDtos);
         dto.setTotalAmount(total);

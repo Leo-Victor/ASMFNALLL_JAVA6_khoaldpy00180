@@ -18,6 +18,7 @@ public class CartItem {
     private Integer sizeId;
     private String sizeName;
     private BigDecimal price;
+    private BigDecimal discount;
     private Integer quantity;
     private String image;
 }

@@ -18,10 +18,12 @@ const loadNotifications = async () => {
         return;
     }
     try {
-        const latestRes = await api.notifications.latest(10);
-        notifications.value = latestRes.data || [];
-        const unreadRes = await api.notifications.unreadCount();
-        unreadCount.value = unreadRes.data?.count || 0;
+        const [latestRes, countRes] = await Promise.all([
+            api.notifications.latest(100),
+            api.notifications.unreadCount()
+        ]);
+        notifications.value = latestRes?.data || [];
+        unreadCount.value = countRes?.data?.count || 0;
     } catch (e) {
     }
 };
@@ -127,12 +129,12 @@ onUnmounted(() => {
                         <router-link class="btn btn-primary btn-sm" to="/account/sign-up">Đăng ký</router-link>
                     </div>
                     <div class="header-user" v-else>
-                        <div class="notification-bell-wrap">
+                        <div class="notification-bell-wrap" ref="bellRef">
                             <button class="notification-bell-btn" type="button" @click="toggleBell">
                                 🔔
                                 <span class="notification-badge" v-if="unreadCount > 0">{{ unreadCount }}</span>
                             </button>
-                            <div class="notification-dropdown" v-if="bellOpen">
+                            <div class="notification-dropdown" v-if="bellOpen" style="max-height: 400px; overflow-y: auto;">
                                 <div class="notification-dropdown-title">Thông báo</div>
                                 <button class="notification-item" :class="{ 'unread': !item.read }" type="button" v-for="item in notifications" :key="item.id" @click="openNotification(item)" @mouseenter="hoverNotification(item)">
                                     <div class="notification-item-title">

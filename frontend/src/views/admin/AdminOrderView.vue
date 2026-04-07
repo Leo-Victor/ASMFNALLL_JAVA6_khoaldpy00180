@@ -15,6 +15,7 @@ let routeLine = null;
 let simulateTimer = null;
 const statusLabel = (value) => {
     const labels = {
+        PENDING_PAYMENT: "Đang chờ thanh toán",
         PLACED_UNPAID: "Đã đặt - chưa thanh toán",
         PLACED_PAID: "Đã đặt - đã thanh toán",
         SHIPPING_UNPAID: "Đang giao - chưa thanh toán",
@@ -28,6 +29,9 @@ const isDelivered = (value) => value === "DELIVERED_SUCCESS" || value === "DONE"
 const statusColor = (value) => isDelivered(value) ? "#64d441" : "#b62c54";
 const statusOptions = computed(() => {
     const current = selected.value?.order?.status || "";
+    if (current === "PENDING_PAYMENT") {
+        return [{value: "PLACED_UNPAID", label: "Chuyển thành COD (chưa TT)"}];
+    }
     if (current === "PLACED_UNPAID") {
         return [{value: "SHIPPING_UNPAID", label: "Đang giao - chưa TT"}];
     }
@@ -36,23 +40,23 @@ const statusOptions = computed(() => {
     }
     if (current === "SHIPPING_UNPAID") {
         return [
-            {value: "SHIPPING_UNPAID", label: "Đang giao - chưa TT"},
-            {value: "DELIVERED_SUCCESS", label: "Giao thành công"},
-            {value: "DELIVERY_FAILED", label: "Giao thất bại"}
+            {value: "SHIPPING_UNPAID", label: "Đang giao - chưa TT"}
         ];
     }
     if (current === "SHIPPING_PAID") {
         return [
-            {value: "SHIPPING_PAID", label: "Đang giao - đã TT"},
-            {value: "DELIVERED_SUCCESS", label: "Giao thành công"},
-            {value: "DELIVERY_FAILED", label: "Giao thất bại"}
+            {value: "SHIPPING_PAID", label: "Đang giao - đã TT"}
         ];
     }
     if (isDelivered(current)) {
         return [{value: current, label: "Giao thành công"}];
     }
     if (current === "DELIVERY_FAILED" || current === "CANCEL") {
-        return [{value: current, label: "Giao thất bại"}];
+        return [
+            {value: current, label: "Giao thất bại"},
+            {value: "SHIPPING_UNPAID", label: "Đang giao lại (chưa TT)"},
+            {value: "SHIPPING_PAID", label: "Đang giao lại (đã TT)"}
+        ];
     }
     return [{value: current || "PLACED_UNPAID", label: statusLabel(current || "PLACED_UNPAID")}];
 });
@@ -100,8 +104,10 @@ const initMap = async () => {
     }
     const L = await ensureLeaflet();
     const store = [13.779876, 109.228232];
-    const lat = Number(selected.value.deliveryLat || 10.7769);
-    const lng = Number(selected.value.deliveryLng || 106.7009);
+    
+    const lat = Number(selected.value?.order?.latitude || 10.7769);
+    const lng = Number(selected.value?.order?.longitude || 106.7009);
+    
     const dest = [lat, lng];
     if (!map) {
         map = L.map(mapRef.value).setView([(store[0] + dest[0]) / 2, (store[1] + dest[1]) / 2], 12);
