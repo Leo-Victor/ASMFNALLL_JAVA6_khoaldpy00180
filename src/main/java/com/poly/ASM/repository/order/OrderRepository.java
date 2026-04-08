@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
@@ -13,6 +14,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findAllWithAccount();
 
     List<Order> findByAccountUsernameOrderByCreateDateDesc(String username);
+
+    Optional<Order> findFirstByAccountUsernameAndStatusOrderByCreateDateDesc(String username, String status);
 
     @Query("""
             select a.fullname as fullname,

@@ -38,6 +38,14 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    public Optional<Order> findLatestPendingPaymentByUsername(String username) {
+        if (username == null || username.isBlank()) {
+            return Optional.empty();
+        }
+        return orderRepository.findFirstByAccountUsernameAndStatusOrderByCreateDateDesc(username, "PENDING_PAYMENT");
+    }
+
+    @Override
     public Order create(Order order) {
         return orderRepository.save(order);
     }
@@ -52,19 +60,12 @@ public class OrderServiceImpl implements OrderService {
         String previousStatus = existingOpt.map(Order::getStatus).orElse(null);
         String nextStatus = order.getStatus();
         if (nextStatus != null && !nextStatus.equals(previousStatus)) {
-            // Restore inventory if order is cancelled or delivery failed
-            if ("CANCEL".equals(nextStatus) || "DELIVERY_FAILED".equals(nextStatus)) {
+            boolean wasDelivered = isDeliveredStatus(previousStatus);
+            boolean nowDelivered = isDeliveredStatus(nextStatus);
+            if (!wasDelivered && nowDelivered) {
+                adjustInventory(order.getId(), -1);
+            } else if (wasDelivered && !nowDelivered) {
                 adjustInventory(order.getId(), 1);
-            }
-            // Reduce inventory again if re-delivering and succeeded
-            if ("DELIVERED_SUCCESS".equals(nextStatus) && "DELIVERY_FAILED".equals(previousStatus)) {
-                adjustInventory(order.getId(), -1);
-            }
-            if ("DELIVERED_SUCCESS".equals(nextStatus) && "CANCEL".equals(previousStatus)) {
-                adjustInventory(order.getId(), -1);
-            }
-            if ("SHIPPING".equals(nextStatus) && ("CANCEL".equals(previousStatus) || "DELIVERY_FAILED".equals(previousStatus))) {
-                adjustInventory(order.getId(), -1);
             }
         }
         return orderRepository.save(order);

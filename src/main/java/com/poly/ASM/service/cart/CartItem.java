@@ -21,4 +21,5 @@ public class CartItem {
     private BigDecimal discount;
     private Integer quantity;
     private String image;
+    private Integer stock;
 }

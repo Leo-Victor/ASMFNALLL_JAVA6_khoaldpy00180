@@ -13,6 +13,8 @@ public interface OrderService {
 
     List<Order> findByAccountUsername(String username);
 
+    Optional<Order> findLatestPendingPaymentByUsername(String username);
+
     Order create(Order order);
 
     Order update(Order order);

@@ -1,6 +1,6 @@
 <script setup>
 import {onMounted, onUnmounted, ref, watch} from "vue";
-import {useRoute, useRouter} from "vue-router";
+import {onBeforeRouteLeave, useRoute, useRouter} from "vue-router";
 import {BankTransferPage} from "@/legacy/pages";
 import {api} from "@/api";
 
@@ -11,6 +11,7 @@ const paymentMessage = ref("");
 const checkingStatus = ref(false);
 const copiedKey = ref("");
 const cancelModalOpen = ref(false);
+const autoCancelSent = ref(false);
 const transferContent = () => String(data.value?.order?.id || orderId.value || "").trim();
 const copyText = async (key, text) => {
     if (!text) {
@@ -32,6 +33,7 @@ const toOrderDetail = async () => {
     if (!orderId.value) {
         return;
     }
+    autoCancelSent.value = true;
     paymentMessage.value = "Đang chuyển đến chi tiết đơn hàng...";
     setTimeout(() => {
         router.push(`/order/order-detail?id=${orderId.value}`);
@@ -72,16 +74,61 @@ const confirm = async () => {
 };
 const handleRemove = async () => {
     try {
+        autoCancelSent.value = true;
         await remove();
         cancelModalOpen.value = true;
     } catch (e) {
         paymentMessage.value = e.message || "Hủy thanh toán thất bại.";
     }
 };
+const handleToCod = async () => {
+    try {
+        autoCancelSent.value = true;
+        await toCod();
+    } catch (e) {
+        paymentMessage.value = e.message || "Không thể chuyển sang COD.";
+    }
+};
+const sendCancelPayosOnLeave = () => {
+    if (autoCancelSent.value || !orderId.value) {
+        return;
+    }
+    autoCancelSent.value = true;
+    const endpoint = "/api/order-workflow/bank-transfer/cancel/payos";
+    const body = new URLSearchParams({
+        orderId: String(orderId.value),
+        reason: "Leave bank transfer page"
+    });
+    try {
+        if (navigator.sendBeacon) {
+            navigator.sendBeacon(endpoint, body);
+            return;
+        }
+    } catch (e) {
+    }
+    try {
+        fetch(endpoint, {
+            method: "POST",
+            credentials: "include",
+            headers: {"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"},
+            body: body.toString(),
+            keepalive: true
+        });
+    } catch (e) {
+    }
+};
+const onBeforeUnload = () => {
+    sendCancelPayosOnLeave();
+};
 
 const goHome = () => {
     router.push("/");
 };
+
+onBeforeRouteLeave(() => {
+    sendCancelPayosOnLeave();
+    return true;
+});
 
 onMounted(() => {
     const queryId = Number(route.query.id || route.query.orderId || "");
@@ -90,11 +137,13 @@ onMounted(() => {
         load();
     }
     pollTimer = setInterval(pollPayos, 5000);
+    window.addEventListener("beforeunload", onBeforeUnload);
 });
 onUnmounted(() => {
     if (pollTimer) {
         clearInterval(pollTimer);
     }
+    window.removeEventListener("beforeunload", onBeforeUnload);
 });
 </script>
 
@@ -154,7 +203,7 @@ onUnmounted(() => {
             </div>
             <div class="transfer-actions">
                 <button class="btn btn-outline" type="button" :disabled="checkingStatus" @click="confirm">{{ checkingStatus ? "Đang kiểm tra..." : "Kiểm tra trạng thái" }}</button>
-                <button class="btn btn-outline" type="button" @click="toCod">Chuyển sang COD</button>
+                <button class="btn btn-outline" type="button" @click="handleToCod">Chuyển sang COD</button>
                 <button class="btn btn-outline" type="button" @click="handleRemove">Hủy thanh toán</button>
             </div>
         </div>

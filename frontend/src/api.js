@@ -158,6 +158,7 @@ export const api = {
         confirmBankTransfer: (orderId) => form("/api/order-workflow/bank-transfer/confirm", "POST", {orderId}),
         switchToCod: (orderId) => form("/api/order-workflow/bank-transfer/cancel/switch-cod", "POST", {orderId}),
         cancelAndDelete: (orderId) => form("/api/order-workflow/bank-transfer/cancel/delete", "POST", {orderId}),
+        retryPayment: (id) => request(`/api/order-workflow/retry-payment/${id}`, {method: "POST"}),
         orderList: () => request("/api/order-workflow/list"),
         orderDetail: (id) => request(`/api/order-workflow/detail/${id}`),
         myProducts: () => request("/api/order-workflow/my-product-list"),

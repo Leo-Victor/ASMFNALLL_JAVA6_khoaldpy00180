@@ -1,37 +1,100 @@
 <script setup>
 import {CartPage} from "@/legacy/pages";
-import {ref} from "vue";
+import {computed, ref} from "vue";
 
 const {state, error, loading, updateItem, removeItem, clear, money} = CartPage.setup();
 
 const updating = ref({});
+const quantityMessage = ref("");
+const lineDiscount = (item) => {
+    const price = Number(item?.price || 0);
+    const quantity = Number(item?.quantity || 0);
+    const discountPercent = Number(item?.discount || 0);
+    if (!price || !quantity || !discountPercent) {
+        return 0;
+    }
+    return (price * quantity * discountPercent) / 100;
+};
+const totalDiscount = computed(() => {
+    return (state.items || []).reduce((sum, item) => sum + lineDiscount(item), 0);
+});
+const itemKey = (item) => item.productId + '-' + item.sizeId;
+const itemMaxStock = (item) => {
+    const stock = Number(item?.stock || 0);
+    return Number.isFinite(stock) && stock > 0 ? Math.floor(stock) : 1;
+};
+const normalizeQty = (item, value) => {
+    const max = itemMaxStock(item);
+    const parsed = Number.parseInt(String(value || "").replace(/\D+/g, ""), 10);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+        return 1;
+    }
+    return Math.min(parsed, max);
+};
+const onQtyKeydown = (event) => {
+    const allow = ["Backspace", "Delete", "Tab", "ArrowLeft", "ArrowRight", "Home", "End", "Enter"];
+    if (allow.includes(event.key)) {
+        return;
+    }
+    if (!/^\d$/.test(event.key)) {
+        event.preventDefault();
+    }
+};
+const onQtyInput = (item, event) => {
+    const raw = String(event?.target?.value || "");
+    const digits = raw.replace(/\D+/g, "");
+    event.target.value = digits;
+    if (!digits) {
+        item.quantity = 1;
+        return;
+    }
+    const next = normalizeQty(item, digits);
+    item.quantity = next;
+    const typed = Number.parseInt(digits, 10);
+    if (Number.isFinite(typed) && typed > itemMaxStock(item)) {
+        quantityMessage.value = `Vì mặt hàng "${item.name}" chỉ còn tồn kho ${itemMaxStock(item)} cái, nên Số lượng tối đa được nhập là ${itemMaxStock(item)}.`;
+    } else {
+        quantityMessage.value = "";
+    }
+};
+const applyQuantity = async (item) => {
+    const key = itemKey(item);
+    if (updating.value[key]) return;
+    const next = normalizeQty(item, item.quantity);
+    item.quantity = next;
+    updating.value[key] = true;
+    quantityMessage.value = "";
+    try {
+        await updateItem(item);
+    } catch (e) {
+        quantityMessage.value = e.message || "Không thể cập nhật số lượng.";
+    } finally {
+        updating.value[key] = false;
+    }
+};
 
 const minus = async (item) => {
-    const key = item.productId + '-' + item.sizeId;
+    const key = itemKey(item);
     if (updating.value[key]) return;
     
     if ((item.quantity || 1) > 1) {
-        updating.value[key] = true;
-        try {
-            item.quantity -= 1;
-            await updateItem(item);
-        } finally {
-            updating.value[key] = false;
-        }
+        item.quantity = normalizeQty(item, Number(item.quantity || 1) - 1);
+        await applyQuantity(item);
     }
 };
 
 const plus = async (item) => {
-    const key = item.productId + '-' + item.sizeId;
+    const key = itemKey(item);
     if (updating.value[key]) return;
-    
-    updating.value[key] = true;
-    try {
-        item.quantity = (item.quantity || 0) + 1;
-        await updateItem(item);
-    } finally {
-        updating.value[key] = false;
+    const next = Number(item.quantity || 0) + 1;
+    const max = itemMaxStock(item);
+    if (next > max) {
+        quantityMessage.value = `Số lượng tối đa cho "${item.name}" là ${max}.`;
+        item.quantity = max;
+        return;
     }
+    item.quantity = normalizeQty(item, next);
+    await applyQuantity(item);
 };
 </script>
 
@@ -42,6 +105,7 @@ const plus = async (item) => {
             
             <div v-if="loading" class="status-message">Đang tải...</div>
             <div v-if="error" class="status-message status-error">{{ error }}</div>
+            <div v-if="quantityMessage" class="status-message status-error">{{ quantityMessage }}</div>
             
             <div v-if="!state.items.length && !loading" class="empty-cart">
                 <div class="empty-cart-icon">🛒</div>
@@ -57,6 +121,7 @@ const plus = async (item) => {
                             <tr>
                                 <th>Sản phẩm</th>
                                 <th>Giá</th>
+                                <th>Giảm giá</th>
                                 <th>Số lượng</th>
                                 <th>Size</th>
                                 <th></th>
@@ -71,10 +136,21 @@ const plus = async (item) => {
                                     </div>
                                 </td>
                                 <td>{{ money(item.price) }} VNĐ</td>
+                                <td>-{{ money(lineDiscount(item)) }} VNĐ</td>
                                 <td>
                                     <div class="cart-item-qty-form">
                                         <button class="btn btn-outline-secondary btn-sm" type="button" @click="minus(item)" :disabled="updating[item.productId + '-' + item.sizeId]">-</button>
-                                        <input type="number" min="1" v-model.number="item.quantity" class="cart-item-qty-input" @change="updateItem(item)">
+                                        <input
+                                            type="text"
+                                            inputmode="numeric"
+                                            pattern="[0-9]*"
+                                            :value="item.quantity"
+                                            class="cart-item-qty-input"
+                                            @keydown="onQtyKeydown"
+                                            @input="onQtyInput(item, $event)"
+                                            @blur="applyQuantity(item)"
+                                            @keyup.enter="applyQuantity(item)"
+                                        >
                                         <button class="btn btn-outline-secondary btn-sm" type="button" @click="plus(item)" :disabled="updating[item.productId + '-' + item.sizeId]">+</button>
                                     </div>
                                 </td>
@@ -89,6 +165,10 @@ const plus = async (item) => {
                 
                 <div class="cart-summary">
                     <div class="cart-summary-content">
+                        <div class="cart-summary-row">
+                            <span>Tổng giảm giá:</span>
+                            <strong>-{{ money(totalDiscount) }} VNĐ</strong>
+                        </div>
                         <div class="cart-summary-row">
                             <span>Tổng tiền:</span>
                             <strong class="cart-total">{{ money(state.totalPrice) }} VNĐ</strong>

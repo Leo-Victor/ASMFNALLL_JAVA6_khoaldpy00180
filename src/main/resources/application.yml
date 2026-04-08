@@ -37,6 +37,8 @@ server:
     max-parameter-count: 10000
 app:
   frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+  debug:
+    payos-response: ${APP_DEBUG_PAYOS_RESPONSE:false}
 camera:
   hls-url: http://10.86.42.36:8888/index.m3u8
 payos:

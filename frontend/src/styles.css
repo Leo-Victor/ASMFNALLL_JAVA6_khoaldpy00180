@@ -1009,7 +1009,7 @@ textarea:focus {
 }
 
 .cart-item-qty-input {
-    width: 60px !important;
+    width: 120px !important;
     text-align: center;
     padding: 8px !important;
 }

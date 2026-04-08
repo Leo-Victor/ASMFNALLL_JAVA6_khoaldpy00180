@@ -259,8 +259,10 @@ const CartPage = {
         const state = reactive({items: [], totalPrice: 0});
         const error = ref("");
         const loading = ref(false);
-        const load = async () => {
-            loading.value = true;
+        const load = async (showLoading = true) => {
+            if (showLoading) {
+                loading.value = true;
+            }
             try {
                 const res = await api.cart.get();
                 state.items = res.data?.items || [];
@@ -268,16 +270,18 @@ const CartPage = {
             } catch (e) {
                 error.value = e.message;
             } finally {
-                loading.value = false;
+                if (showLoading) {
+                    loading.value = false;
+                }
             }
         };
         const updateItem = async (item) => {
             await api.cart.update(item.productId, item.sizeId, item.quantity);
-            await load();
+            await load(false);
         };
         const removeItem = async (item) => {
             await api.cart.remove(item.productId, item.sizeId);
-            await load();
+            await load(false);
         };
         const clear = async () => {
             try {
@@ -288,7 +292,7 @@ const CartPage = {
                     await api.cart.remove(item.productId, item.sizeId);
                 }
             } finally {
-                await load();
+                await load(false);
             }
         };
         onMounted(load);

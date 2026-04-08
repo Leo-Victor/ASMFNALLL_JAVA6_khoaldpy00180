@@ -18,6 +18,9 @@ import com.poly.ASM.service.product.ProductSizeService;
 import com.poly.ASM.service.review.ProductReviewService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -52,6 +55,7 @@ import java.util.Optional;
 @RequestMapping("/api/order-workflow")
 @RequiredArgsConstructor
 public class OrderController {
+    private static final Logger log = LoggerFactory.getLogger(OrderController.class);
 
     private final OrderService orderService;
     private final OrderDetailService orderDetailService;
@@ -63,6 +67,8 @@ public class OrderController {
     private final PayosPaymentService payosPaymentService;
     private final JdbcTemplate jdbcTemplate;
     private final CartItemRepository cartItemRepository;
+    @Value("${app.debug.payos-response:false}")
+    private boolean debugPayosResponse;
 
     @GetMapping("/checkout")
     public ResponseEntity<ApiResponse<?>> checkoutForm() {
@@ -84,6 +90,14 @@ public class OrderController {
                                                    @RequestParam(value = "lat", required = false) Double lat,
                                                    @RequestParam(value = "lng", required = false) Double lng,
                                                    @RequestParam("paymentMethod") String paymentMethod) {
+        boolean bankPayment = "BANK".equalsIgnoreCase(paymentMethod);
+        Account user = authService.getUser();
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
+        }
+        Order reusablePendingOrder = bankPayment
+                ? orderService.findLatestPendingPaymentByUsername(user.getUsername()).orElse(null)
+                : null;
         List<CartItem> items = cartService.getCartItems();
         if (items.isEmpty()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Giỏ hàng trống", null));
@@ -103,10 +117,6 @@ public class OrderController {
                 String size = item.getSizeName() != null ? item.getSizeName() : "size đã chọn";
                 return ResponseEntity.badRequest().body(ApiResponse.error(name + " (" + size + ") vượt quá tồn kho. Vui lòng giảm số lượng.", null));
             }
-        }
-        Account user = authService.getUser();
-        if (user == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
         }
         ensureOrderAddressColumns();
         String normalizedProvinceCode = provinceCode == null ? null : provinceCode.trim();
@@ -129,11 +139,31 @@ public class OrderController {
         if (resolvedShippingPhone == null || resolvedShippingPhone.isBlank()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Vui lòng nhập số điện thoại giao hàng.", null));
         }
-        Order order = new Order();
-        order.setAccount(user);
-        order.setAddress(resolvedAddress);
-        order.setStatus("BANK".equalsIgnoreCase(paymentMethod) ? "PENDING_PAYMENT" : "PLACED_UNPAID");
-        Order savedOrder = orderService.create(order);
+        Order savedOrder;
+        if (bankPayment) {
+            if (reusablePendingOrder != null) {
+                Long oldOrderId = reusablePendingOrder.getId();
+                try {
+                    payosPaymentService.cancelPaymentLink(oldOrderId, "Recreate payment order");
+                } catch (Exception ignored) {
+                }
+                notificationService.deleteByOrderId(oldOrderId);
+                orderDetailService.deleteByOrderId(oldOrderId);
+                orderService.deleteById(oldOrderId);
+            }
+            Order order = new Order();
+            order.setAccount(user);
+            order.setAddress(resolvedAddress);
+            order.setStatus("PENDING_PAYMENT");
+            savedOrder = orderService.create(order);
+            clearOrderPaymentData(savedOrder.getId());
+        } else {
+            Order order = new Order();
+            order.setAccount(user);
+            order.setAddress(resolvedAddress);
+            order.setStatus("PLACED_UNPAID");
+            savedOrder = orderService.create(order);
+        }
         updateOrderAdministrative(savedOrder.getId(), normalizedProvinceCode, normalizedWardCode);
         updateOrderCoordinates(savedOrder.getId(), lat, lng);
         updateOrderShippingPhone(savedOrder.getId(), resolvedShippingPhone);
@@ -158,17 +188,13 @@ public class OrderController {
             detail.setSizeName(item.getSizeName());
             orderDetailService.create(detail);
             
-            // Deduct inventory when order is placed
-            int currentQty = productSize.get().getQuantity();
-            productSize.get().setQuantity(Math.max(0, currentQty - item.getQuantity()));
-            productSizeService.save(productSize.get());
         }
-        if (!"BANK".equalsIgnoreCase(paymentMethod)) {
+        if (!bankPayment) {
             cartService.clearCart();
         }
         Map<String, Object> data = new HashMap<>();
         data.put("orderId", savedOrder.getId());
-        data.put("nextAction", "BANK".equalsIgnoreCase(paymentMethod) ? "BANK_TRANSFER" : "VIEW_ORDER_DETAIL");
+        data.put("nextAction", bankPayment ? "BANK_TRANSFER" : "VIEW_ORDER_DETAIL");
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Đặt hàng thành công", data));
     }
 
@@ -200,6 +226,22 @@ public class OrderController {
         String returnUrl = baseUrl + "/api/order-workflow/payos/return?orderId=" + order.getId();
         String cancelUrl = baseUrl + "/api/order-workflow/payos/cancel?orderId=" + order.getId();
         try {
+            Optional<Map<String, String>> cachedPayment = findOrderPaymentData(order.getId());
+            if (cachedPayment.isPresent()) {
+                Map<String, String> cache = cachedPayment.get();
+                Map<String, Object> existingData = toBankTransferResponseData(
+                        order,
+                        total,
+                        cache.get("checkoutUrl"),
+                        cache.get("qrCode"),
+                        cache.get("accountName"),
+                        cache.get("accountNumber"),
+                        cache.get("bankBin"),
+                        cache.get("paymentLinkId"),
+                        amount
+                );
+                return ResponseEntity.ok(ApiResponse.success("Lấy thông tin chuyển khoản thành công", existingData));
+            }
             CreatePaymentLinkResponse response = payosPaymentService.createPaymentLink(
                     order.getId(),
                     amount,
@@ -207,16 +249,39 @@ public class OrderController {
                     returnUrl,
                     cancelUrl
             );
-            Map<String, Object> data = new HashMap<>();
-            data.put("order", toOrderData(order));
-            data.put("totalPrice", total);
-            data.put("checkoutUrl", response.getCheckoutUrl());
-            data.put("qrImageSrc", buildQrImageSrc(response.getQrCode()));
-            data.put("accountName", response.getAccountName());
-            data.put("accountNumber", response.getAccountNumber());
-            data.put("bankName", "BIDV");
-            data.put("bankBin", response.getBin());
-            data.put("paymentLinkId", response.getPaymentLinkId());
+            saveOrderPaymentData(
+                    order.getId(),
+                    response.getCheckoutUrl(),
+                    response.getQrCode(),
+                    response.getAccountName(),
+                    response.getAccountNumber(),
+                    response.getBin(),
+                    response.getPaymentLinkId()
+            );
+            Map<String, Object> data = toBankTransferResponseData(
+                    order,
+                    total,
+                    response.getCheckoutUrl(),
+                    response.getQrCode(),
+                    response.getAccountName(),
+                    response.getAccountNumber(),
+                    response.getBin(),
+                    response.getPaymentLinkId(),
+                    amount
+            );
+            if (debugPayosResponse) {
+                Map<String, Object> debugData = new HashMap<>();
+                debugData.put("orderCode", order.getId());
+                debugData.put("amount", amount);
+                debugData.put("bin", response.getBin());
+                debugData.put("accountName", response.getAccountName());
+                debugData.put("accountNumber", response.getAccountNumber());
+                debugData.put("checkoutUrl", response.getCheckoutUrl());
+                debugData.put("paymentLinkId", response.getPaymentLinkId());
+                debugData.put("qrCode", response.getQrCode());
+                data.put("payosDebug", debugData);
+                log.info("PAYOS_CREATE_LINK_DEBUG {}", debugData);
+            }
             return ResponseEntity.ok(ApiResponse.success("Tạo thông tin chuyển khoản thành công", data));
         } catch (PayOSException ex) {
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(ApiResponse.error("Không thể tạo link thanh toán. Vui lòng thử lại.", null));
@@ -262,6 +327,29 @@ public class OrderController {
         }
         updateOrderStatusIfChanged(orderOpt.get(), "PLACED_UNPAID");
         return ResponseEntity.ok(ApiResponse.success("Đã chuyển sang COD", Map.of("orderId", orderId)));
+    }
+
+    @PostMapping("/bank-transfer/cancel/payos")
+    public ResponseEntity<ApiResponse<?>> cancelPayosOnly(@RequestParam("orderId") Long orderId,
+                                                          @RequestParam(value = "reason", required = false) String reason) {
+        Account user = authService.getUser();
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
+        }
+        Optional<Order> orderOpt = orderService.findById(orderId);
+        if (orderOpt.isEmpty() || orderOpt.get().getAccount() == null || !user.getUsername().equals(orderOpt.get().getAccount().getUsername())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Không có quyền truy cập đơn hàng", null));
+        }
+        Order order = orderOpt.get();
+        if (!"PENDING_PAYMENT".equals(order.getStatus())) {
+            return ResponseEntity.ok(ApiResponse.success("Đơn hàng không còn ở trạng thái chờ thanh toán", Map.of("orderId", orderId)));
+        }
+        try {
+            String cancelReason = firstNonBlank(reason, "Leave bank transfer page");
+            payosPaymentService.cancelIfPending(orderId, cancelReason);
+        } catch (Exception ignored) {
+        }
+        return ResponseEntity.ok(ApiResponse.success("Đã gửi yêu cầu hủy thanh toán lên PayOS", Map.of("orderId", orderId)));
     }
 
     @PostMapping("/bank-transfer/cancel/delete")
@@ -392,6 +480,44 @@ public class OrderController {
         data.put("reviewable", isDeliveredStatus(order.getStatus()));
         data.put("reviewedProductIds", productReviewService.findReviewedProductIds(user.getUsername(), id));
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết đơn hàng thành công", data));
+    }
+
+    @PostMapping("/retry-payment/{id}")
+    public ResponseEntity<ApiResponse<?>> retryPayment(@PathVariable("id") Long id) {
+        Account user = authService.getUser();
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
+        }
+        Optional<Order> orderOpt = orderService.findById(id);
+        if (orderOpt.isEmpty() || orderOpt.get().getAccount() == null || !user.getUsername().equals(orderOpt.get().getAccount().getUsername())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Không có quyền truy cập đơn hàng", null));
+        }
+        Order order = orderOpt.get();
+        if (!"PENDING_PAYMENT".equals(order.getStatus())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Đơn hàng này không ở trạng thái chờ thanh toán.", null));
+        }
+        List<OrderDetail> details = orderDetailService.findByOrderId(id);
+        if (details == null || details.isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Đơn hàng không còn sản phẩm để thanh toán lại.", null));
+        }
+        cartService.clearCart();
+        int addedCount = 0;
+        for (OrderDetail detail : details) {
+            Integer productId = detail.getProduct() != null ? detail.getProduct().getId() : null;
+            Integer sizeId = detail.getSizeId();
+            Integer quantity = detail.getQuantity();
+            if (productId == null || sizeId == null || quantity == null || quantity <= 0) {
+                continue;
+            }
+            boolean added = cartService.add(productId, sizeId, quantity);
+            if (added) {
+                addedCount++;
+            }
+        }
+        if (addedCount == 0) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Không thể đưa lại sản phẩm vào giỏ hàng. Vui lòng kiểm tra tồn kho.", null));
+        }
+        return ResponseEntity.ok(ApiResponse.success("Đã chuẩn bị giỏ hàng để thanh toán lại.", Map.of("orderId", id, "added", addedCount)));
     }
 
     @GetMapping("/my-product-list")
@@ -565,6 +691,30 @@ public class OrderController {
         return null;
     }
 
+    private Map<String, Object> toBankTransferResponseData(Order order,
+                                                           BigDecimal total,
+                                                           String checkoutUrl,
+                                                           String qrCode,
+                                                           String accountName,
+                                                           String accountNumber,
+                                                           String bankBin,
+                                                           String paymentLinkId,
+                                                           long amount) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("order", toOrderData(order));
+        data.put("totalPrice", total);
+        data.put("checkoutUrl", checkoutUrl);
+        data.put("qrImageSrc", buildQrImageSrc(qrCode));
+        data.put("accountName", firstNonBlank(accountName, ""));
+        data.put("accountNumber", firstNonBlank(accountNumber, ""));
+        data.put("bankName", "BIDV");
+        data.put("bankBin", bankBin);
+        data.put("paymentLinkId", paymentLinkId);
+        data.put("amount", amount);
+        return data;
+    }
+
+
     private Optional<String> findProvinceName(String provinceCode) {
         try {
             String value = jdbcTemplate.queryForObject(
@@ -654,6 +804,110 @@ public class OrderController {
                 IF COL_LENGTH('dbo.orders', 'shipping_phone') IS NULL
                 BEGIN
                     ALTER TABLE dbo.orders ADD shipping_phone NVARCHAR(20) NULL;
+                END
+            """);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void saveOrderPaymentData(Long orderId,
+                                      String checkoutUrl,
+                                      String qrCode,
+                                      String accountName,
+                                      String accountNumber,
+                                      String bankBin,
+                                      String paymentLinkId) {
+        if (orderId == null) {
+            return;
+        }
+        ensureOrderPaymentColumns();
+        try {
+            jdbcTemplate.update(
+                    "update dbo.orders set pay_checkout_url = ?, pay_qr_code = ?, pay_account_name = ?, pay_account_number = ?, pay_bank_bin = ?, pay_payment_link_id = ? where id = ?",
+                    checkoutUrl,
+                    qrCode,
+                    accountName,
+                    accountNumber,
+                    bankBin,
+                    paymentLinkId,
+                    orderId
+            );
+        } catch (Exception ignored) {
+        }
+    }
+
+    private Optional<Map<String, String>> findOrderPaymentData(Long orderId) {
+        if (orderId == null) {
+            return Optional.empty();
+        }
+        ensureOrderPaymentColumns();
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    "select pay_checkout_url, pay_qr_code, pay_account_name, pay_account_number, pay_bank_bin, pay_payment_link_id from dbo.orders where id = ?",
+                    orderId
+            );
+            if (rows.isEmpty()) {
+                return Optional.empty();
+            }
+            Map<String, Object> row = rows.get(0);
+            String checkoutUrl = row.get("pay_checkout_url") != null ? String.valueOf(row.get("pay_checkout_url")) : "";
+            String qrCode = row.get("pay_qr_code") != null ? String.valueOf(row.get("pay_qr_code")) : "";
+            if (checkoutUrl.isBlank() || qrCode.isBlank()) {
+                return Optional.empty();
+            }
+            Map<String, String> result = new HashMap<>();
+            result.put("checkoutUrl", checkoutUrl);
+            result.put("qrCode", qrCode);
+            result.put("accountName", row.get("pay_account_name") != null ? String.valueOf(row.get("pay_account_name")) : "");
+            result.put("accountNumber", row.get("pay_account_number") != null ? String.valueOf(row.get("pay_account_number")) : "");
+            result.put("bankBin", row.get("pay_bank_bin") != null ? String.valueOf(row.get("pay_bank_bin")) : "");
+            result.put("paymentLinkId", row.get("pay_payment_link_id") != null ? String.valueOf(row.get("pay_payment_link_id")) : "");
+            return Optional.of(result);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private void clearOrderPaymentData(Long orderId) {
+        if (orderId == null) {
+            return;
+        }
+        ensureOrderPaymentColumns();
+        try {
+            jdbcTemplate.update(
+                    "update dbo.orders set pay_checkout_url = null, pay_qr_code = null, pay_account_name = null, pay_account_number = null, pay_bank_bin = null, pay_payment_link_id = null where id = ?",
+                    orderId
+            );
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void ensureOrderPaymentColumns() {
+        try {
+            jdbcTemplate.execute("""
+                IF COL_LENGTH('dbo.orders', 'pay_checkout_url') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD pay_checkout_url NVARCHAR(1000) NULL;
+                END
+                IF COL_LENGTH('dbo.orders', 'pay_qr_code') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD pay_qr_code NVARCHAR(MAX) NULL;
+                END
+                IF COL_LENGTH('dbo.orders', 'pay_account_name') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD pay_account_name NVARCHAR(255) NULL;
+                END
+                IF COL_LENGTH('dbo.orders', 'pay_account_number') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD pay_account_number NVARCHAR(100) NULL;
+                END
+                IF COL_LENGTH('dbo.orders', 'pay_bank_bin') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD pay_bank_bin NVARCHAR(20) NULL;
+                END
+                IF COL_LENGTH('dbo.orders', 'pay_payment_link_id') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.orders ADD pay_payment_link_id NVARCHAR(255) NULL;
                 END
             """);
         } catch (Exception ignored) {

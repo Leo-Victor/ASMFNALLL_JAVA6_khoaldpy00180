@@ -45,18 +45,7 @@ const retryPayment = async (order) => {
     repayingOrderId.value = order.id;
     actionMessage.value = "";
     try {
-        const detailRes = await api.orderWorkflow.orderDetail(order.id);
-        const details = detailRes?.data?.details || [];
-        await api.cart.clear();
-        for (const item of details) {
-            const productId = item?.product?.id || item?.productId;
-            const sizeId = item?.sizeId;
-            const quantity = Number(item?.quantity || 1);
-            if (!productId || !sizeId || !Number.isFinite(quantity) || quantity <= 0) {
-                continue;
-            }
-            await api.cart.addDetail(productId, sizeId, quantity);
-        }
+        await api.orderWorkflow.retryPayment(order.id);
         await router.push("/order/check-out");
     } catch (e) {
         actionMessage.value = e.message || "Không thể chuẩn bị thanh toán lại đơn hàng.";

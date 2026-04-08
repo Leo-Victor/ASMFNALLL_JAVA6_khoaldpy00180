@@ -274,7 +274,8 @@ public class CartServiceImpl implements CartService {
                 product.getPrice(),
                 product.getDiscount(),
                 quantity,
-                product.getImage()
+                product.getImage(),
+                productSize.get().getQuantity()
         );
         items.add(newItem);
         saveSessionItems(items);
@@ -287,6 +288,12 @@ public class CartServiceImpl implements CartService {
         for (var ci : entities) {
             var p = ci.getProduct();
             var s = ci.getSize();
+            Integer stock = null;
+            if (p != null && s != null) {
+                stock = productSizeService.findByProductIdAndSizeId(p.getId(), s.getId())
+                        .map(ProductSize::getQuantity)
+                        .orElse(null);
+            }
             items.add(new CartItem(
                     p != null ? p.getId() : null,
                     p != null ? p.getName() : null,
@@ -295,7 +302,8 @@ public class CartServiceImpl implements CartService {
                     p != null ? p.getPrice() : null,
                     p != null ? p.getDiscount() : null,
                     ci.getQuantity(),
-                    p != null ? p.getImage() : null
+                    p != null ? p.getImage() : null,
+                    stock
             ));
         }
         return items;
