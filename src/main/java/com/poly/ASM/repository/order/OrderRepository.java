@@ -18,14 +18,20 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findFirstByAccountUsernameAndStatusOrderByCreateDateDesc(String username, String status);
 
     @Query("""
-            select a.fullname as fullname,
+            select a.username as username,
+                   a.fullname as fullname,
+                   a.photo as photo,
+                   a.email as email,
+                   a.address as address,
+                   a.phone as phone,
                    sum(d.price * d.quantity) as totalAmount,
                    min(o.createDate) as firstOrderDate,
                    max(o.createDate) as lastOrderDate
             from Order o
             join o.account a
             join o.orderDetails d
-            group by a.fullname
+            where a.isDelete = false
+            group by a.username, a.fullname, a.photo, a.email, a.address, a.phone
             order by sum(d.price * d.quantity) desc
             """)
     List<VipReport> getVipCustomers(Pageable pageable);

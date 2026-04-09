@@ -1,10 +1,11 @@
 <script setup>
 import {computed, nextTick, onMounted, reactive, ref, watch} from "vue";
-import {useRoute} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import {api} from "@/api";
 import AdminNav from "@/components/AdminNav.vue";
 
 const route = useRoute();
+const router = useRouter();
 const revenueTableRef = ref(null);
 const rows = ref([]);
 const loading = ref(false);
@@ -159,6 +160,20 @@ const modeTitle = computed(() => {
     }
     return "Doanh thu theo đơn hàng";
 });
+const revenueTabs = [
+    {mode: "summary", label: "Doanh thu tổng", to: "/admin/revenue"},
+    {mode: "day", label: "Doanh thu ngày", to: "/admin/revenue/day"},
+    {mode: "week", label: "Doanh thu tuần", to: "/admin/revenue/week"},
+    {mode: "month", label: "Doanh thu tháng", to: "/admin/revenue/month"},
+    {mode: "quarter", label: "Doanh thu quý", to: "/admin/revenue/quarter"},
+    {mode: "year", label: "Doanh thu năm", to: "/admin/revenue/year"}
+];
+const openRevenueTab = async (to) => {
+    if (!to || route.path === to) {
+        return;
+    }
+    await router.push(to);
+};
 const scrollToRevenueTable = async () => {
     await nextTick();
     revenueTableRef.value?.scrollIntoView({behavior: "smooth", block: "start"});
@@ -194,6 +209,7 @@ const exportExcel = async () => {
         params.append("sortField", isSummaryMode.value ? summaryParams.sortField : periodParams.sortField);
         params.append("sortDir", isSummaryMode.value ? summaryParams.sortDir : periodParams.sortDir);
         params.append("mode", viewMode.value);
+        params.append("format", "xlsx");
         const response = await fetch(`/api/admin/reports/revenue/export?${params.toString()}`, {
             method: "GET",
             credentials: "include"
@@ -211,7 +227,9 @@ const exportExcel = async () => {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `doanh-thu-${viewMode.value}.csv`;
+        const cd = response.headers.get("content-disposition") || "";
+        const match = cd.match(/filename=\"?([^\";]+)\"?/i);
+        link.download = match?.[1] || `doanh-thu-${viewMode.value}.xlsx`;
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -368,6 +386,18 @@ function describePieArc(cx, cy, r, startAngle, endAngle) {
             </div>
             <div class="admin-product-main">
                 <div class="revenue-title">BẢNG DOANH THU BÁN HÀNG</div>
+            <div class="revenue-tabs">
+                <button
+                    v-for="tab in revenueTabs"
+                    :key="tab.mode"
+                    class="revenue-tab-btn"
+                    :class="{active: viewMode === tab.mode}"
+                    type="button"
+                    @click="openRevenueTab(tab.to)"
+                >
+                    {{ tab.label }}
+                </button>
+            </div>
             <h4 class="revenue-subtitle">{{ modeTitle }}</h4>
             <form class="card revenue-filter" @submit.prevent="applyFilters" v-if="isSummaryMode">
                 <div class="form-group">
@@ -399,7 +429,7 @@ function describePieArc(cx, cy, r, startAngle, endAngle) {
                 <div class="table-actions">
                     <button class="btn btn-primary" type="submit" :disabled="loading">Lọc</button>
                     <button class="btn btn-outline-primary" type="button" @click="clearSummaryFilters" :disabled="loading">Xoá lọc</button>
-                    <button class="btn btn-action-outline" type="button" @click="exportExcel" :disabled="exporting || loading">{{ exporting ? "Đang xuất..." : "Xuất Excel" }}</button>
+                    <button class="btn btn-outline-primary" type="button" @click="exportExcel" :disabled="exporting || loading">{{ exporting ? "Đang xuất..." : "Xuất Excel" }}</button>
                 </div>
             </form>
             <form class="card revenue-filter" @submit.prevent="applyFilters" v-else>
@@ -447,7 +477,7 @@ function describePieArc(cx, cy, r, startAngle, endAngle) {
                 </div>
                 <div class="table-actions">
                     <button class="btn btn-primary" type="submit" :disabled="loading">Lọc dữ liệu</button>
-                    <button class="btn btn-action-outline" type="button" @click="exportExcel" :disabled="exporting || loading">{{ exporting ? "Đang xuất..." : "Xuất Excel" }}</button>
+                    <button class="btn btn-outline-primary" type="button" @click="exportExcel" :disabled="exporting || loading">{{ exporting ? "Đang xuất..." : "Xuất Excel" }}</button>
                 </div>
             </form>
             <div v-if="error" class="status-message status-error">{{ error }}</div>
@@ -552,3 +582,39 @@ function describePieArc(cx, cy, r, startAngle, endAngle) {
         </div>
     </main>
 </template>
+
+<style scoped>
+.revenue-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.revenue-tab-btn {
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    background: #fff;
+    color: #111827;
+    font-weight: 600;
+    padding: 8px 12px;
+}
+
+.revenue-tab-btn.active {
+    background: #111827;
+    color: #fff;
+    border-color: #111827;
+}
+
+.admin-product-page .page-title {
+    margin-bottom: 6px;
+}
+
+.admin-product-shell {
+    margin-top: 0;
+}
+
+.revenue-title {
+    margin-top: 0;
+}
+</style>

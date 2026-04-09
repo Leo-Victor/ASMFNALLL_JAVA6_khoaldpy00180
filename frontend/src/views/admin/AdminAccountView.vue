@@ -7,6 +7,7 @@ import AdminNav from "@/components/AdminNav.vue";
 const {rows, roles, form, modalOpen, editing, msg, edit, openCreate, closeModal, onPhotoChange, save, remove} = AdminAccountPage.setup();
 const {state} = useSession();
 const currentUsername = computed(() => state.me?.username || "");
+const visibleRows = computed(() => (rows.value || []).filter((u) => u?.username !== currentUsername.value));
 </script>
 
 <template>
@@ -42,7 +43,7 @@ const currentUsername = computed(() => state.me?.username || "");
                         </tr>
                         </thead>
                         <tbody>
-                        <tr v-for="u in rows" :key="u.username">
+                        <tr v-for="u in visibleRows" :key="u.username">
                             <td>{{ u.username }}</td>
                             <td>{{ u.fullname }}</td>
                             <td>{{ u.email }}</td>
@@ -51,7 +52,7 @@ const currentUsername = computed(() => state.me?.username || "");
                             <td>{{ u.roleId === "ADMIN" ? "Quản trị viên" : "Người dùng" }}</td>
                             <td class="table-actions" style="justify-content: center;">
                                 <button class="btn btn-action-outline" type="button" @click="edit(u.username)">Sửa</button>
-                                <button class="btn btn-action-solid" type="button" v-if="u.username !== currentUsername" @click="remove(u.username)">Xoá</button>
+                                <button class="btn btn-action-solid" type="button" @click="remove(u.username)">Xoá</button>
                             </td>
                         </tr>
                         </tbody>

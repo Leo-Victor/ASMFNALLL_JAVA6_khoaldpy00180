@@ -208,7 +208,8 @@ export const api = {
         },
         reports: {
             revenue: (params) => request(`/api/admin/reports/revenue${toQuery(params)}`),
-            vip: () => request("/api/admin/reports/vip")
+            vip: () => request("/api/admin/reports/vip"),
+            vipExport: () => request("/api/admin/reports/vip/export")
         },
         camera: {
             info: () => request("/api/admin/camera")
