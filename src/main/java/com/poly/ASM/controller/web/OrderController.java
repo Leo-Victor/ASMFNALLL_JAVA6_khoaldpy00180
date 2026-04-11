@@ -251,7 +251,7 @@ public class OrderController {
             CreatePaymentLinkResponse response = payosPaymentService.createPaymentLink(
                     order.getId(),
                     amount,
-                    "Thanh toan don hang #" + order.getId(),
+                    buildPayosDescription(order.getId()),
                     returnUrl,
                     cancelUrl
             );
@@ -290,6 +290,13 @@ public class OrderController {
             }
             return ResponseEntity.ok(ApiResponse.success("Tạo thông tin chuyển khoản thành công", data));
         } catch (PayOSException ex) {
+            log.error("PAYOS_CREATE_LINK_FAILED orderId={} amount={} returnUrl={} cancelUrl={} message={}",
+                    order.getId(),
+                    amount,
+                    returnUrl,
+                    cancelUrl,
+                    ex.getMessage(),
+                    ex);
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(ApiResponse.error("Không thể tạo link thanh toán. Vui lòng thử lại.", null));
         }
     }
@@ -726,6 +733,12 @@ public class OrderController {
         data.put("paymentLinkId", paymentLinkId);
         data.put("amount", amount);
         return data;
+    }
+
+    private String buildPayosDescription(Long orderId) {
+        String normalizedOrderId = orderId == null ? "0" : String.valueOf(orderId);
+        String description = "DH" + normalizedOrderId;
+        return description.length() > 25 ? description.substring(0, 25) : description;
     }
 
 
