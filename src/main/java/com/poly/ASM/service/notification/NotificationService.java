@@ -17,6 +17,8 @@ public interface NotificationService {
 
     void notifyOrderStatusChange(Order order, String status);
 
+    void notifyChatSupportForAdmins(String customerId, String customerFullname, Integer productId, String previewText, String assignedAdminId);
+
     long countUnread(String username);
 
     List<Notification> getLatest(String username, int limit);

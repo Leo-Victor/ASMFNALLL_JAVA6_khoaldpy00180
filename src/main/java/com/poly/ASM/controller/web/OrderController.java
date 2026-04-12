@@ -540,6 +540,23 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm đã mua thành công", toOrderDetailData(details)));
     }
 
+    @GetMapping("/my-delivered-product-list")
+    public ResponseEntity<ApiResponse<?>> myDeliveredProductList() {
+        Account user = authService.getUser();
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
+        }
+        List<Order> orders = orderService.findByAccountUsername(user.getUsername());
+        List<OrderDetail> delivered = new ArrayList<>();
+        for (Order order : orders) {
+            if (order == null || !isDeliveredStatus(order.getStatus()) || order.getId() == null) {
+                continue;
+            }
+            delivered.addAll(orderDetailService.findByOrderId(order.getId()));
+        }
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm đã mua (đã giao) thành công", toOrderDetailData(delivered)));
+    }
+
     private boolean isDeliveredStatus(String status) {
         if (status == null) {
             return false;

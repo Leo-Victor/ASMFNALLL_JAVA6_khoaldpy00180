@@ -17,11 +17,15 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @RestController
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor
 public class NotificationController {
+
+    private static final Pattern CHAT_CTX_PATTERN = Pattern.compile("\\[CHAT_CTX\\]customerId=([^;\\n]+);productId=(\\d+)");
 
     private final AuthService authService;
     private final NotificationService notificationService;
@@ -65,14 +69,7 @@ public class NotificationController {
             notificationService.markRead(notification);
         }
 
-        String redirectUrl = "/home/index";
-        if (notification.getOrder() != null && notification.getOrder().getId() != null) {
-            if (authService.hasRole("ADMIN")) {
-                redirectUrl = "/admin/order?orderId=" + notification.getOrder().getId();
-            } else {
-                redirectUrl = "/order/order-detail?id=" + notification.getOrder().getId();
-            }
-        }
+        String redirectUrl = resolveRedirectUrl(notification);
         Map<String, Object> data = new HashMap<>();
         data.put("notificationId", notification.getId());
         data.put("orderId", notification.getOrder() == null ? null : notification.getOrder().getId());
@@ -84,20 +81,35 @@ public class NotificationController {
         Map<String, Object> map = new HashMap<>();
         map.put("id", notification.getId());
         map.put("title", notification.getTitle());
-        map.put("content", notification.getContent());
+        map.put("content", stripChatContext(notification.getContent()));
         map.put("read", notification.getRead());
         map.put("createdAt", notification.getCreatedAt());
         Long orderId = notification.getOrder() == null ? null : notification.getOrder().getId();
         map.put("orderId", orderId);
-        if (orderId != null) {
-            if (authService.hasRole("ADMIN")) {
-                map.put("redirectUrl", "/admin/order?orderId=" + orderId);
-            } else {
-                map.put("redirectUrl", "/order/order-detail?id=" + orderId);
-            }
-        } else {
-            map.put("redirectUrl", "/home/index");
-        }
+        map.put("redirectUrl", resolveRedirectUrl(notification));
         return map;
+    }
+
+    private String resolveRedirectUrl(Notification notification) {
+        if (notification.getOrder() != null && notification.getOrder().getId() != null) {
+            if (authService.hasRole("ADMIN")) {
+                return "/admin/order?orderId=" + notification.getOrder().getId();
+            }
+            return "/order/order-detail?id=" + notification.getOrder().getId();
+        }
+        Matcher matcher = CHAT_CTX_PATTERN.matcher(String.valueOf(notification.getContent()));
+        if (matcher.find() && authService.hasRole("ADMIN")) {
+            String customerId = matcher.group(1);
+            String productId = matcher.group(2);
+            return "/admin/chat?customerId=" + customerId + "&productId=" + productId;
+        }
+        return "/home/index";
+    }
+
+    private String stripChatContext(String content) {
+        if (content == null || content.isBlank()) {
+            return "";
+        }
+        return content.replaceAll("\\n?\\[CHAT_CTX\\][\\s\\S]*$", "").trim();
     }
 }

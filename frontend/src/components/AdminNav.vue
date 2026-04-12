@@ -21,5 +21,8 @@
         <router-link class="admin-nav-link" to="/admin/vip">
             <span>Khách VIP</span>
         </router-link>
+        <router-link class="admin-nav-link" to="/admin/chat">
+            <span>Chat hỗ trợ khách hàng</span>
+        </router-link>
     </nav>
 </template>

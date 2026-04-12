@@ -448,3 +448,27 @@ GO
 -- Import
 :r .\mssql_ImportData_vn_units.sql
 GO
+
+-- CHAT 
+IF OBJECT_ID('dbo.chat_messages', 'U') IS NOT NULL
+    DROP TABLE dbo.chat_messages;
+
+CREATE TABLE dbo.chat_messages (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    product_id INT NOT NULL,
+    customer_id VARCHAR(50) NOT NULL,
+    admin_id VARCHAR(50) NULL,
+    content NVARCHAR(MAX) NULL,
+    media_url VARCHAR(MAX) NULL,
+    created_at DATETIME NOT NULL DEFAULT GETDATE(),
+    sender_role VARCHAR(10) NOT NULL DEFAULT 'USER',
+    CONSTRAINT CK_chat_messages_sender_role CHECK (sender_role IN ('USER', 'ADMIN')),
+    CONSTRAINT FK_chat_messages_products FOREIGN KEY (product_id) REFERENCES dbo.products(id),
+    CONSTRAINT FK_chat_messages_customer FOREIGN KEY (customer_id) REFERENCES dbo.accounts(username),
+    CONSTRAINT FK_chat_messages_admin FOREIGN KEY (admin_id) REFERENCES dbo.accounts(username)
+);
+GO
+
+CREATE INDEX IX_chat_messages_customer_id ON dbo.chat_messages(customer_id);
+CREATE INDEX IX_chat_messages_product_id ON dbo.chat_messages(product_id);
+GO

@@ -2,7 +2,7 @@
 import {computed, onMounted, reactive, ref, watch} from "vue";
 import {useRoute} from "vue-router";
 import {OrderDetailPage} from "@/legacy/pages";
-import {api} from "@/api";
+import {api, openSupportChat} from "@/api";
 import router from "@/router";
 
 const {orderId, data, error, load, money} = OrderDetailPage.setup();
@@ -81,6 +81,17 @@ const buyAgain = async (detail) => {
     }
     await router.push(`/product/detail?id=${productId}`);
 };
+const contactSeller = (detail) => {
+    const productId = Number(detail?.product?.id || detail?.productId || 0);
+    if (!productId) {
+        return;
+    }
+    openSupportChat({
+        productId,
+        productName: detail?.product?.name || detail?.productName || "",
+        thumbnailUrl: detail?.product?.image ? `/images/${detail.product.image}` : ""
+    });
+};
 const statusLabel = (status) => {
     const map = {
         PLACED_PAID: "Đã đặt - đã TT",
@@ -142,7 +153,10 @@ watch(() => route.query.orderId, initOrderByQuery);
                                 <td>{{ d.quantity }}</td>
                                 <td>{{ d.sizeName }}</td>
                                 <td><strong>{{ money((d.price - (d.price * (d.product?.discount || d.discount || 0) / 100)) * d.quantity) }} đ</strong></td>
-                                <td><button class="btn btn-outline" type="button" @click="buyAgain(d)">Mua lại</button></td>
+                                <td style="display:flex;gap:8px;flex-wrap:wrap">
+                                    <button class="btn btn-outline" type="button" @click="buyAgain(d)">Mua lại</button>
+                                    <button class="btn btn-outline" type="button" @click="contactSeller(d)">Liên hệ người bán</button>
+                                </td>
                             </tr>
                     <tr>
                         <td colspan="7">

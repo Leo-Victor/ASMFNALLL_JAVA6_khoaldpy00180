@@ -1,6 +1,7 @@
 <script setup>
 import {CartPage} from "@/legacy/pages";
 import {computed, ref} from "vue";
+import {openSupportChat} from "@/api";
 
 const {state, error, loading, updateItem, removeItem, clear, money} = CartPage.setup();
 
@@ -111,6 +112,18 @@ const plus = async (item) => {
     item.quantity = normalizeQty(item, next);
     await applyQuantity(item);
 };
+
+const openSellerChat = (item) => {
+    const productId = Number(item?.productId || 0);
+    if (!productId) {
+        return;
+    }
+    openSupportChat({
+        productId,
+        productName: item?.name || "",
+        thumbnailUrl: item?.image ? `/images/${item.image}` : ""
+    });
+};
 </script>
 
 <template>
@@ -183,7 +196,10 @@ const plus = async (item) => {
                                 </td>
                                 <td>{{ item.sizeName }}</td>
                                 <td>
-                                    <button class="btn btn-action-solid btn-sm" type="button" @click="removeItem(item)">Xóa</button>
+                                    <div class="cart-row-actions">
+                                        <button class="btn btn-outline-secondary btn-sm cart-row-btn" type="button" @click="openSellerChat(item)">Liên hệ người bán</button>
+                                        <button class="btn btn-action-solid btn-sm cart-row-btn" type="button" @click="removeItem(item)">Xóa</button>
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>
@@ -210,3 +226,18 @@ const plus = async (item) => {
         </div>
     </main>
 </template>
+
+<style scoped>
+.cart-row-actions{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:nowrap;
+}
+.cart-row-btn{
+    height:34px;
+    padding:0 12px !important;
+    line-height:1 !important;
+    white-space:nowrap;
+}
+</style>

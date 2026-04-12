@@ -10,9 +10,18 @@ const toQuery = (params = {}) => {
     return text ? `?${text}` : "";
 };
 
+export const SUPPORT_CHAT_OPEN_EVENT = "support-chat:open";
+export const openSupportChat = (payload = {}) => {
+    if (typeof window === "undefined") {
+        return;
+    }
+    window.dispatchEvent(new CustomEvent(SUPPORT_CHAT_OPEN_EVENT, {detail: payload}));
+};
+
 const authFeatureByPath = [
     {prefix: "/api/cart", feature: "Giỏ hàng"},
     {prefix: "/api/order-workflow", feature: "Đơn hàng"},
+    {prefix: "/api/chat", feature: "Chat hỗ trợ"},
     {prefix: "/api/account/profile", feature: "Hồ sơ tài khoản"},
     {prefix: "/api/account/change-password", feature: "Đổi mật khẩu"},
     {prefix: "/api/notifications", feature: "Thông báo"},
@@ -162,7 +171,16 @@ export const api = {
         orderList: () => request("/api/order-workflow/list"),
         orderDetail: (id) => request(`/api/order-workflow/detail/${id}`),
         myProducts: () => request("/api/order-workflow/my-product-list"),
+        myDeliveredProducts: () => request("/api/order-workflow/my-delivered-product-list"),
         payosStatus: (orderId) => request(`/api/order-workflow/payos/status${toQuery({orderId})}`)
+    },
+    chat: {
+        messages: (productId) => request(`/api/chat/messages${toQuery({productId})}`),
+        upload: (file) => {
+            const formData = new FormData();
+            formData.append("file", file);
+            return request("/api/chat/upload", {method: "POST", body: formData});
+        }
     },
     reviews: {
         createFromOrder: (payload) => {
@@ -213,6 +231,10 @@ export const api = {
         },
         camera: {
             info: () => request("/api/admin/camera")
+        },
+        chat: {
+            conversations: () => request("/api/admin/chat/conversations"),
+            messages: (customerId, productId) => request(`/api/admin/chat/messages${toQuery({customerId, productId})}`)
         }
     }
 };

@@ -89,6 +89,25 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    public void notifyChatSupportForAdmins(String customerId, String customerFullname, Integer productId, String previewText, String assignedAdminId) {
+        String user = customerFullname == null || customerFullname.isBlank() ? customerId : customerFullname;
+        String title = "Hỗ trợ chat mới";
+        String preview = previewText == null || previewText.isBlank() ? "Khách hàng vừa gửi tin nhắn mới." : previewText;
+        String content = user + " cần hỗ trợ ở sản phẩm #" + productId + ": " + preview
+                + "\n[CHAT_CTX]customerId=" + customerId + ";productId=" + productId;
+        List<Authority> admins = authorityRepository.findByRoleId("ADMIN");
+        for (Authority authority : admins) {
+            Account account = authority.getAccount();
+            if (account != null) {
+                if (assignedAdminId != null && !assignedAdminId.isBlank() && !assignedAdminId.equals(account.getUsername())) {
+                    continue;
+                }
+                createNotification(account, null, title, content);
+            }
+        }
+    }
+
+    @Override
     public long countUnread(String username) {
         return notificationRepository.countByAccountUsernameAndReadFalse(username);
     }
