@@ -658,35 +658,37 @@ textarea:focus {
 }
 
 .product-card__price {
-    font-size: 14px;
-    font-weight: 600;
-    color: #1a1a1a;
-    animation: priceGlow 2s ease-in-out infinite;
+    font-size: 17px;
+    font-weight: 900;
+    color: #dc2626;
+    line-height: 1;
+    animation: none;
 }
 
 .product-card__price-row {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 8px;
     flex-wrap: wrap;
 }
 
 .product-card__price-old {
-    font-size: 12px;
-    color: #888888;
+    font-size: 9px;
+    color: #9ca3af;
     text-decoration: line-through;
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .product-card__discount-badge {
-    display: inline-block;
-    margin-top: 4px;
-    padding: 2px 8px;
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
     border-radius: 999px;
-    background: #ffe8ef;
-    color: #b62c54;
-    font-size: 11px;
-    font-weight: 700;
+    background: #ef4444;
+    color: #fff;
+    font-size: 8px;
+    font-weight: 800;
+    line-height: 1;
 }
 
 @keyframes priceGlow {

@@ -369,8 +369,8 @@ watch(() => [route.query.customerId, route.query.productId], async () => {
                                 <div class="right-product-sub">Mã SP: #{{ activeConversation.productId }} · {{ activeConversation.categoryName || "Danh mục chưa rõ" }}</div>
                                 <div class="right-product-price">
                                     <span class="price-final">{{ formatMoney(activeConversation.productFinalPrice) }}</span>
-                                    <span class="price-origin">{{ formatMoney(activeConversation.productPrice) }}</span>
-                                    <span class="price-discount">-{{ Number(activeConversation.productDiscount || 0) }}%</span>
+                                    <span v-if="Number(activeConversation.productDiscount || 0) > 0" class="price-origin">{{ formatMoney(activeConversation.productPrice) }}</span>
+                                    <span v-if="Number(activeConversation.productDiscount || 0) > 0" class="price-discount-badge">-{{ Number(activeConversation.productDiscount || 0) }}%</span>
                                 </div>
                             </div>
                         </div>
@@ -452,9 +452,9 @@ watch(() => [route.query.customerId, route.query.productId], async () => {
 .right-product-name{font-size:13px;font-weight:800;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px}
 .right-product-sub{margin-top:2px;font-size:12px;color:#6b7280}
 .right-product-price{margin-top:5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.price-final{font-size:13px;font-weight:800;color:#111827}
-.price-origin{font-size:12px;color:#6b7280;text-decoration:line-through}
-.price-discount{font-size:12px;color:#16a34a;font-weight:700}
+.price-final{font-size:15px;font-weight:900;color:#dc2626}
+.price-origin{font-size:12px;color:#9ca3af;text-decoration:line-through}
+.price-discount-badge{font-size:11px;font-weight:800;color:#fff;background:#ef4444;border-radius:999px;padding:3px 8px;line-height:1}
 .right-history{flex:1;min-height:0;overflow:auto;padding:12px;background:#f8fafc;display:flex;flex-direction:column;gap:10px}
 .status{padding:10px;border:1px dashed #e5e7eb;border-radius:10px;background:#fff;color:#374151;font-size:13px}
 .status-error{border-color:#fecaca;background:#fff1f2;color:#991b1b}

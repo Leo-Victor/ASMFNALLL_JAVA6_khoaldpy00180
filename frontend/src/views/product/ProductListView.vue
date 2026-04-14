@@ -210,8 +210,8 @@ const clearFilters = async () => {
                                 <div class="product-card__price-row">
                                     <div class="product-card__price">{{ money(finalPrice(p)) }} VNĐ</div>
                                     <div v-if="hasDiscount(p)" class="product-card__price-old">{{ money(p.price) }} VNĐ</div>
+                                    <div v-if="hasDiscount(p)" class="product-card__discount-badge">-{{ discountPercent(p) }}%</div>
                                 </div>
-                                <div v-if="hasDiscount(p)" class="product-card__discount-badge">-{{ discountPercent(p) }}%</div>
                                 <div class="product-card__stock" style="font-size: 12px; color: #666; margin-top: 4px;">Kho: {{ p.quantity || 0 }}</div>
                             </div>
                             <div class="product-card__actions">
