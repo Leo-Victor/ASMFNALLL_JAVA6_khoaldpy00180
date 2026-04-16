@@ -80,7 +80,16 @@ public class AccountController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
         }
-        return ResponseEntity.ok(ApiResponse.success("Lấy hồ sơ người dùng thành công", user));
+        Map<String, Object> data = new HashMap<>();
+        data.put("username", user.getUsername());
+        data.put("fullname", user.getFullname());
+        data.put("email", user.getEmail());
+        data.put("phone", user.getPhone());
+        data.put("address", user.getAddress());
+        data.put("photo", user.getPhoto());
+        data.put("activated", user.getActivated());
+        data.put("accountType", isGoogleAccount(user) ? "GOOGLE" : "NORMAL");
+        return ResponseEntity.ok(ApiResponse.success("Lấy hồ sơ người dùng thành công", data));
     }
 
     @PostMapping("/profile")
@@ -98,10 +107,15 @@ public class AccountController {
             return ResponseEntity.badRequest().body(ApiResponse.error("Email đã tồn tại", null));
         }
         if (phone != null && !phone.isBlank()) {
-            Optional<Account> byPhone = accountService.findByPhone(phone.trim());
+            String normalizedPhone = phone.replaceAll("\\s+", "").trim();
+            if (!isValidPhone(normalizedPhone)) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("Số điện thoại phải gồm 10 số, bắt đầu bằng 0 và không được là 10 số 0.", null));
+            }
+            Optional<Account> byPhone = accountService.findByPhone(normalizedPhone);
             if (byPhone.isPresent() && !byPhone.get().getUsername().equals(user.getUsername())) {
                 return ResponseEntity.badRequest().body(ApiResponse.error("Số điện thoại đã tồn tại", null));
             }
+            phone = normalizedPhone;
         }
 
         user.setFullname(fullname);
@@ -147,6 +161,9 @@ public class AccountController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
         }
+        if (isGoogleAccount(user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Tài khoản Google không hỗ trợ đổi mật khẩu tại hệ thống.", null));
+        }
         if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Mật khẩu hiện tại không đúng", null));
         }
@@ -184,5 +201,32 @@ public class AccountController {
     private String generateStrongPassword() {
         String base = UUID.randomUUID().toString().replace("-", "");
         return base.substring(0, 8) + "Aa1!";
+    }
+
+    private boolean isValidPhone(String phone) {
+        if (phone == null) {
+            return false;
+        }
+        if (!phone.matches("^0\\d{9}$")) {
+            return false;
+        }
+        return !"0000000000".equals(phone);
+    }
+
+    private boolean isGoogleAccount(Account account) {
+        if (account == null) {
+            return false;
+        }
+        String phone = account.getPhone() == null ? "" : account.getPhone().trim();
+        String address = account.getAddress() == null ? "" : account.getAddress().trim();
+        String photo = account.getPhoto() == null ? "" : account.getPhoto().trim();
+        String email = account.getEmail() == null ? "" : account.getEmail().trim().toLowerCase();
+        String username = account.getUsername() == null ? "" : account.getUsername().trim().toLowerCase();
+        boolean defaultProfile = "0000000000".equals(phone) && "Chưa cập nhật".equalsIgnoreCase(address);
+        boolean hasRemotePhoto = photo.startsWith("http://") || photo.startsWith("https://");
+        String localPart = email.contains("@") ? email.substring(0, email.indexOf('@')) : email;
+        String normalized = localPart.replaceAll("[^a-z0-9._-]", "_").replaceAll("_+", "_");
+        boolean usernameMatchesGooglePattern = !normalized.isBlank() && (username.equals(normalized) || username.startsWith(normalized + "_"));
+        return defaultProfile && (hasRemotePhoto || usernameMatchesGooglePattern);
     }
 }

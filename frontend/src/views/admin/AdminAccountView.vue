@@ -1,13 +1,78 @@
 <script setup>
-import {computed} from "vue";
+import {computed, ref} from "vue";
 import {AdminAccountPage} from "@/legacy/pages";
 import {useSession} from "@/composables/useSession";
 import AdminNav from "@/components/AdminNav.vue";
+import {api} from "@/api";
 
-const {rows, roles, form, modalOpen, editing, msg, edit, openCreate, closeModal, onPhotoChange, save, remove} = AdminAccountPage.setup();
+const {rows, roles, form, modalOpen, editing, msg, load, openCreate, closeModal, onPhotoChange, save} = AdminAccountPage.setup();
 const {state} = useSession();
 const currentUsername = computed(() => state.me?.username || "");
 const visibleRows = computed(() => (rows.value || []).filter((u) => u?.username !== currentUsername.value));
+const previewOpen = ref(false);
+const previewSrc = ref("");
+const previewName = ref("");
+const previewImageError = ref(false);
+const updateNoticeOpen = ref(false);
+const updateNoticeText = ref("");
+
+const roleOptions = computed(() => (roles.value || []).map((r) => r.id));
+const roleLabel = (roleId) => {
+    const key = String(roleId || "").toUpperCase();
+    if (key === "ADMIN") return "Quản trị viên";
+    if (key === "USER") return "Khách hàng";
+    return key || "Khách hàng";
+};
+const openPreview = (u) => {
+    const raw = String(u?.photo || "").trim();
+    previewName.value = u?.username || "";
+    previewSrc.value = raw
+        ? (/^https?:\/\//i.test(raw) ? raw : (raw.startsWith("/") ? raw : `/images/${raw}`))
+        : "/images/logo.png";
+    previewImageError.value = false;
+    previewOpen.value = true;
+};
+const closePreview = () => {
+    previewOpen.value = false;
+    previewSrc.value = "";
+    previewName.value = "";
+    previewImageError.value = false;
+};
+const previewInitial = computed(() => {
+    const text = String(previewName.value || "").trim();
+    return text ? text.slice(0, 1).toUpperCase() : "U";
+});
+const openUpdateNotice = (text) => {
+    updateNoticeText.value = text || "Cập nhật thành công.";
+    updateNoticeOpen.value = true;
+};
+const closeUpdateNotice = () => {
+    updateNoticeOpen.value = false;
+    updateNoticeText.value = "";
+};
+const updateRole = async (u, event) => {
+    const nextRole = String(event?.target?.value || "").trim();
+    if (!u?.username || !nextRole) return;
+    try {
+        await api.admin.accounts.updateRole(u.username, nextRole);
+        await load();
+        openUpdateNotice(`Đã cập nhật vai trò của tài khoản ${u.username}.`);
+    } catch (e) {
+        event.target.value = u.roleId || "USER";
+    }
+};
+const updateActivation = async (u, event) => {
+    if (!u?.username) return;
+    const value = String(event?.target?.value || "active");
+    const activated = value === "active";
+    try {
+        await api.admin.accounts.updateActivation(u.username, activated);
+        await load();
+        openUpdateNotice(`Đã cập nhật trạng thái tài khoản ${u.username}.`);
+    } catch (e) {
+        event.target.value = u.activated ? "active" : "locked";
+    }
+};
 </script>
 
 <template>
@@ -33,26 +98,38 @@ const visibleRows = computed(() => (rows.value || []).filter((u) => u?.username 
                     <table style="min-width: 1000px; width: 100%; white-space: nowrap;">
                         <thead>
                         <tr>
+                            <th>Ảnh</th>
                             <th>Username</th>
                             <th>Họ tên</th>
                             <th>Email</th>
                             <th>Số điện thoại</th>
                             <th>Địa chỉ</th>
+                            <th>Loại tài khoản</th>
                             <th>Vai trò</th>
-                            <th style="width: 150px; text-align: center;">Thao tác</th>
+                            <th>Trạng thái</th>
                         </tr>
                         </thead>
                         <tbody>
                         <tr v-for="u in visibleRows" :key="u.username">
+                            <td>
+                                <button class="btn btn-action-outline" type="button" @click="openPreview(u)">Xem ảnh</button>
+                            </td>
                             <td>{{ u.username }}</td>
                             <td>{{ u.fullname }}</td>
                             <td>{{ u.email }}</td>
                             <td>{{ u.phone }}</td>
                             <td style="white-space: normal; min-width: 200px;">{{ u.address }}</td>
-                            <td>{{ u.roleId === "ADMIN" ? "Quản trị viên" : "Người dùng" }}</td>
-                            <td class="table-actions" style="justify-content: center;">
-                                <button class="btn btn-action-outline" type="button" @click="edit(u.username)">Sửa</button>
-                                <button class="btn btn-action-solid" type="button" @click="remove(u.username)">Xoá</button>
+                            <td>{{ u.accountType === "GOOGLE" ? "Google" : "Bình thường" }}</td>
+                            <td>
+                                <select :value="u.roleId || 'USER'" @change="updateRole(u, $event)">
+                                    <option v-for="r in roleOptions" :key="u.username + '_' + r" :value="r">{{ roleLabel(r) }}</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select :value="u.activated ? 'active' : 'locked'" @change="updateActivation(u, $event)">
+                                    <option value="active">Mở khoá</option>
+                                    <option value="locked">Khoá</option>
+                                </select>
                             </td>
                         </tr>
                         </tbody>
@@ -118,6 +195,34 @@ const visibleRows = computed(() => (rows.value || []).filter((u) => u?.username 
                         </div>
                     </div>
                 </form>
+            </div>
+        </div>
+        <div class="modal-backdrop" :class="{open: previewOpen}" v-if="previewOpen" @click.self="closePreview">
+            <div class="admin-modal-panel" style="max-width: 360px; text-align: center;">
+                <h4 style="margin: 0 0 12px 0;">Ảnh đại diện: {{ previewName }}</h4>
+                <img
+                    v-if="!previewImageError"
+                    :src="previewSrc"
+                    alt="avatar"
+                    style="width:300px;height:300px;object-fit:cover;border-radius:12px;border:1px solid #e5e7eb;"
+                    @error="previewImageError = true"
+                >
+                <div
+                    v-else
+                    style="width:300px;height:300px;border-radius:12px;border:1px solid #e5e7eb;background:#eef2ff;color:#3730a3;font-size:120px;font-weight:800;display:flex;align-items:center;justify-content:center;user-select:none;"
+                >{{ previewInitial }}</div>
+                <div style="margin-top: 12px;">
+                    <button class="btn btn-outline-primary" type="button" @click="closePreview">Đóng</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop" :class="{open: updateNoticeOpen}" v-if="updateNoticeOpen" @click.self="closeUpdateNotice">
+            <div class="admin-modal-panel" style="max-width: 420px; text-align: center;">
+                <h4 style="margin: 0 0 8px 0;">Thông báo</h4>
+                <p style="margin: 0; color: #374151;">{{ updateNoticeText }}</p>
+                <div style="margin-top: 14px;">
+                    <button class="btn btn-primary" type="button" @click="closeUpdateNotice">Đã hiểu</button>
+                </div>
             </div>
         </div>
     </main>

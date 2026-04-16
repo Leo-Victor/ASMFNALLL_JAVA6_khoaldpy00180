@@ -28,6 +28,7 @@ const fileInputRef = ref(null);
 const canUseChat = computed(() => isAuthenticated.value && !isAdmin.value);
 const hideWidgetForAdmin = computed(() => session.loaded && isAdmin.value);
 const hasProduct = computed(() => Number(activeProduct.value.productId || 0) > 0);
+const wsConnected = computed(() => String(status.value || "").toUpperCase() === "CONNECTED");
 const headerTitle = computed(() => {
     if (!hasProduct.value) return "Chat hỗ trợ";
     return activeProduct.value.productName ? activeProduct.value.productName : `Sản phẩm #${activeProduct.value.productId}`;
@@ -292,7 +293,9 @@ watch(() => isOpen.value, async (value) => {
                             <span v-if="hasProduct">Mã: {{ activeProduct.productId }}</span>
                             <span v-else>Chọn sản phẩm để bắt đầu</span>
                             <span class="cb-dot">•</span>
-                            <span>WS: {{ status }}</span>
+                            <span class="cb-ws-indicator" :title="wsConnected ? 'Đã kết nối' : 'Chưa kết nối'">
+                                <span class="cb-ws-light" :class="{on: wsConnected, off: !wsConnected}"></span>
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -345,15 +348,20 @@ watch(() => isOpen.value, async (value) => {
 <style scoped>
 .cb-fab{position:fixed;right:16px;bottom:16px;z-index:9997;border:1px solid #2563eb;background:#2563eb;color:#fff;border-radius:999px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 14px 40px rgba(37,99,235,.35)}
 .cb-fab:hover{filter:brightness(1.05)}
-.cb{position:fixed;right:16px;bottom:16px;width:340px;height:500px;z-index:9997;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.18)}
+.cb{position:fixed;right:16px;bottom:16px;width:420px;height:500px;z-index:9997;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.18)}
 .cb.min{height:62px}
 .cb-header{height:62px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 10px 10px 12px;background:#0b1220;color:#fff}
 .cb-head-left{display:flex;align-items:center;gap:10px;min-width:0}
 .cb-thumb{width:34px;height:34px;border-radius:8px;object-fit:cover;background:#111827}
 .cb-head-text{min-width:0}
-.cb-title{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
-.cb-sub{font-size:12px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:6px}
+.cb-title{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.cb-sub{font-size:12px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:6px;flex-wrap:nowrap;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb-sub span{white-space:nowrap}
 .cb-dot{opacity:.7}
+.cb-ws-indicator{display:inline-flex;align-items:center;justify-content:center}
+.cb-ws-light{width:10px;height:10px;border-radius:999px;border:1px solid rgba(255,255,255,.45);box-shadow:0 0 0 2px rgba(255,255,255,.08) inset}
+.cb-ws-light.on{background:#22c55e}
+.cb-ws-light.off{background:#ef4444}
 .cb-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto}
 .cb-action{border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;border-radius:10px;padding:6px 9px;font-size:12px;cursor:pointer;white-space:nowrap;flex:0 0 auto;line-height:1}
 .cb-action:hover{background:rgba(255,255,255,.12)}

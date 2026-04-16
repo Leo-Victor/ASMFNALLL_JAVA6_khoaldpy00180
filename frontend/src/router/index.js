@@ -83,6 +83,9 @@ router.beforeEach(async (to) => {
             return false;
         }
         if (!requiresAdmin) {
+            if (to.path === "/account/change-password" && String(me.accountType || "").toUpperCase() === "GOOGLE") {
+                return {path: "/account/edit-profile", query: {blocked: "google-password"}};
+            }
             return true;
         }
         const roles = me.roles || [];

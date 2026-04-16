@@ -4,6 +4,7 @@ import {useRoute} from "vue-router";
 import {OrderDetailPage} from "@/legacy/pages";
 import {api, openSupportChat} from "@/api";
 import router from "@/router";
+import {isValidVnPhone10, normalizePhone} from "@/utils/phone";
 
 const {orderId, data, error, load, money} = OrderDetailPage.setup();
 const route = useRoute();
@@ -11,6 +12,24 @@ const reviewForms = reactive({});
 const reviewMessage = ref("");
 const reviewedSet = computed(() => new Set(data.value?.reviewedProductIds || []));
 const isReviewable = computed(() => !!data.value?.reviewable);
+const orderStatus = computed(() => String(data.value?.order?.status || ""));
+const isUnpaidPlaced = computed(() => orderStatus.value === "PLACED_UNPAID");
+const canEditShipping = computed(() => orderStatus.value === "PLACED_UNPAID" || orderStatus.value === "PLACED_PAID");
+const shippingModalOpen = ref(false);
+const shippingSaving = ref(false);
+const shippingError = ref("");
+const shippingForm = reactive({address: "", shippingPhone: ""});
+const exchangeOpen = ref(false);
+const exchangeTarget = ref(null);
+const exchangeRows = ref([]);
+const exchangeCategories = ref([]);
+const exchangePage = ref(0);
+const exchangeTotalPages = ref(0);
+const exchangeLoading = ref(false);
+const exchangeError = ref("");
+const exchangeFilters = reactive({keyword: "", categoryId: "", minPrice: "", maxPrice: ""});
+const exchangeSelection = reactive({});
+const previewImage = ref("");
 const expectedDeliveryDate = computed(() => {
     const base = new Date();
     base.setDate(base.getDate() + 3);
@@ -81,6 +100,130 @@ const buyAgain = async (detail) => {
     }
     await router.push(`/product/detail?id=${productId}`);
 };
+const finalPrice = (row) => {
+    const p = Number(row?.finalPrice ?? row?.price ?? 0);
+    return Number.isFinite(p) ? p : 0;
+};
+const selectedSizeId = (row) => Number(exchangeSelection[row.id]?.sizeId || 0);
+const selectedQty = (row) => Number(exchangeSelection[row.id]?.quantity || 1);
+const lineTotal = (row) => finalPrice(row) * selectedQty(row);
+const ensureSelection = (row) => {
+    if (!exchangeSelection[row.id]) {
+        const firstSize = Array.isArray(row.sizes) && row.sizes.length ? row.sizes[0].sizeId : "";
+        exchangeSelection[row.id] = {sizeId: firstSize, quantity: 1};
+    }
+    return exchangeSelection[row.id];
+};
+const showProductImage = (image) => {
+    if (!image) return;
+    previewImage.value = image.startsWith("/") ? image : `/images/${image}`;
+};
+const closeImagePreview = () => {
+    previewImage.value = "";
+};
+const loadExchangeCatalog = async (page = 0) => {
+    exchangeLoading.value = true;
+    exchangeError.value = "";
+    try {
+        const res = await api.orderWorkflow.exchangeCatalog({
+            page,
+            size: 8,
+            keyword: exchangeFilters.keyword || undefined,
+            categoryId: exchangeFilters.categoryId || undefined,
+            minPrice: exchangeFilters.minPrice || undefined,
+            maxPrice: exchangeFilters.maxPrice || undefined
+        });
+        const payload = res.data || {};
+        exchangeRows.value = Array.isArray(payload.rows) ? payload.rows : [];
+        exchangeCategories.value = Array.isArray(payload.categories) ? payload.categories : [];
+        exchangePage.value = Number(payload.page || 0);
+        exchangeTotalPages.value = Number(payload.totalPages || 0);
+        exchangeRows.value.forEach((row) => ensureSelection(row));
+    } catch (e) {
+        exchangeError.value = e.message || "Không tải được danh sách sản phẩm để đổi.";
+    } finally {
+        exchangeLoading.value = false;
+    }
+};
+const openExchange = async (detail) => {
+    exchangeTarget.value = detail;
+    exchangeOpen.value = true;
+    await loadExchangeCatalog(0);
+};
+const closeExchange = () => {
+    exchangeOpen.value = false;
+    exchangeTarget.value = null;
+    exchangeRows.value = [];
+    exchangeError.value = "";
+};
+const applyExchange = async (row) => {
+    if (!exchangeTarget.value || !data.value?.order?.id) return;
+    const selected = ensureSelection(row);
+    const payload = {
+        productId: row.id,
+        sizeId: Number(selected.sizeId || 0),
+        quantity: Number(selected.quantity || 1)
+    };
+    if (!payload.productId || !payload.sizeId || payload.quantity <= 0) {
+        exchangeError.value = "Vui lòng chọn size và số lượng hợp lệ.";
+        return;
+    }
+    try {
+        await api.orderWorkflow.exchangeDetail(data.value.order.id, exchangeTarget.value.id, payload);
+        await load();
+        closeExchange();
+    } catch (e) {
+        exchangeError.value = e.message || "Không thể đổi sản phẩm.";
+    }
+};
+const removeOrderDetail = async (detail) => {
+    if (!data.value?.order?.id) return;
+    try {
+        const res = await api.orderWorkflow.removeDetail(data.value.order.id, detail.id);
+        if (res.data?.orderDeleted) {
+            await router.push("/order/order-list");
+            return;
+        }
+        await load();
+    } catch (e) {
+        reviewMessage.value = e.message || "Không thể xoá sản phẩm khỏi đơn hàng.";
+    }
+};
+const openShippingModal = () => {
+    shippingForm.address = String(data.value?.order?.address || "").trim();
+    shippingForm.shippingPhone = String(data.value?.order?.shippingPhone || "").trim();
+    shippingError.value = "";
+    shippingModalOpen.value = true;
+};
+const closeShippingModal = () => {
+    if (shippingSaving.value) return;
+    shippingModalOpen.value = false;
+    shippingError.value = "";
+};
+const submitShippingUpdate = async () => {
+    if (!data.value?.order?.id) return;
+    const address = String(shippingForm.address || "").trim();
+    const phone = normalizePhone(shippingForm.shippingPhone);
+    if (!address) {
+        shippingError.value = "Vui lòng nhập địa chỉ giao hàng.";
+        return;
+    }
+    if (!isValidVnPhone10(phone)) {
+        shippingError.value = "Số điện thoại phải gồm 10 số, bắt đầu bằng 0 và không được là 10 số 0.";
+        return;
+    }
+    shippingSaving.value = true;
+    shippingError.value = "";
+    try {
+        await api.orderWorkflow.updateShipping(data.value.order.id, {address, shippingPhone: phone});
+        await load();
+        closeShippingModal();
+    } catch (e) {
+        shippingError.value = e.message || "Không thể cập nhật thông tin giao hàng.";
+    } finally {
+        shippingSaving.value = false;
+    }
+};
 const contactSeller = (detail) => {
     const productId = Number(detail?.product?.id || detail?.productId || 0);
     if (!productId) {
@@ -105,6 +248,7 @@ const statusLabel = (status) => {
         DELIVERED_SUCCESS: "Giao thành công",
         CANCEL: "Giao thất bại",
         DELIVERY_FAILED: "Giao thất bại"
+        ,REFUND_REQUEST: "Yêu cầu hoàn tiền"
     };
     return map[status] || status;
 };
@@ -133,6 +277,9 @@ watch(() => route.query.orderId, initOrderByQuery);
                 <div class="order-detail-line">Địa chỉ: <span>{{ data.order?.address }}</span></div>
                 <div class="order-detail-line">Số điện thoại giao hàng: <span>{{ data.order?.shippingPhone || "Chưa có" }}</span></div>
                 <div class="order-detail-line">Ngày nhận hàng dự kiến: <strong>{{ expectedDeliveryDate }}</strong></div>
+                <div class="order-detail-line" v-if="canEditShipping">
+                    <button class="btn btn-outline-primary" type="button" @click="openShippingModal">Đổi địa chỉ / số ĐT giao hàng</button>
+                </div>
             </div>
         </div>
         <div v-if="reviewMessage" class="status-message">{{ reviewMessage }}</div>
@@ -154,7 +301,11 @@ watch(() => route.query.orderId, initOrderByQuery);
                                 <td>{{ d.sizeName }}</td>
                                 <td><strong>{{ money((d.price - (d.price * (d.product?.discount || d.discount || 0) / 100)) * d.quantity) }} đ</strong></td>
                                 <td style="display:flex;gap:8px;flex-wrap:wrap">
-                                    <button class="btn btn-outline" type="button" @click="buyAgain(d)">Mua lại</button>
+                                    <button v-if="!isUnpaidPlaced" class="btn btn-outline" type="button" @click="buyAgain(d)">Mua lại</button>
+                                    <template v-if="isUnpaidPlaced">
+                                        <button class="btn btn-outline" type="button" @click="openExchange(d)">Đổi hàng</button>
+                                        <button class="btn btn-action-solid" type="button" @click="removeOrderDetail(d)">Xoá</button>
+                                    </template>
                                     <button class="btn btn-outline" type="button" @click="contactSeller(d)">Liên hệ người bán</button>
                                 </td>
                             </tr>
@@ -206,5 +357,133 @@ watch(() => route.query.orderId, initOrderByQuery);
                 </div>
             </div>
         </div>
+        <div class="modal-backdrop" :class="{open: exchangeOpen}" v-if="exchangeOpen">
+            <div class="admin-modal-panel exchange-modal-panel">
+                <div class="table-actions" style="justify-content: space-between; margin-bottom: 10px;">
+                    <h4 style="margin:0;">Đổi sản phẩm cho dòng #{{ exchangeTarget?.id }}</h4>
+                    <button class="btn btn-outline-primary" type="button" @click="closeExchange">Đóng</button>
+                </div>
+                <div class="exchange-filter-bar">
+                    <div class="form-group exchange-filter-item exchange-keyword"><label>Từ khoá</label><input v-model="exchangeFilters.keyword" placeholder="Tên sản phẩm"></div>
+                    <div class="form-group exchange-filter-item exchange-category">
+                        <label>Thể loại</label>
+                        <select v-model="exchangeFilters.categoryId">
+                            <option value="">Tất cả</option>
+                            <option v-for="c in exchangeCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
+                        </select>
+                    </div>
+                    <div class="form-group exchange-filter-item exchange-price"><label>Giá từ</label><input type="number" v-model="exchangeFilters.minPrice"></div>
+                    <div class="form-group exchange-filter-item exchange-price"><label>Giá đến</label><input type="number" v-model="exchangeFilters.maxPrice"></div>
+                    <div class="exchange-filter-item exchange-filter-action">
+                        <button class="btn btn-outline-primary exchange-filter-btn" type="button" @click="loadExchangeCatalog(0)">Lọc</button>
+                    </div>
+                </div>
+                <div v-if="exchangeError" class="status-message status-error">{{ exchangeError }}</div>
+                <div style="overflow-x:auto;">
+                    <table style="min-width:980px;">
+                        <thead>
+                        <tr><th>Tên sản phẩm</th><th>Ảnh</th><th>Giá</th><th>Giá sau giảm</th><th>Size</th><th>Số lượng</th><th>Thành tiền</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                        <tr v-for="row in exchangeRows" :key="row.id">
+                            <td>{{ row.name }}</td>
+                            <td><button class="btn btn-outline-primary" type="button" @click="showProductImage(row.image)">Xem ảnh</button></td>
+                            <td>{{ money(row.price) }} đ</td>
+                            <td><strong style="color:#dc2626;">{{ money(finalPrice(row)) }} đ</strong></td>
+                            <td>
+                                <select v-model="ensureSelection(row).sizeId" style="min-width:90px;">
+                                    <option v-for="s in row.sizes || []" :key="s.sizeId" :value="s.sizeId">{{ s.sizeName }} ({{ s.stock }})</option>
+                                </select>
+                            </td>
+                            <td><input type="number" min="1" v-model.number="ensureSelection(row).quantity" style="width:80px;"></td>
+                            <td>{{ money(lineTotal(row)) }} đ</td>
+                            <td><button class="btn btn-primary" type="button" @click="applyExchange(row)">Chọn</button></td>
+                        </tr>
+                        <tr v-if="!exchangeRows.length && !exchangeLoading"><td colspan="8">Không có sản phẩm phù hợp.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-actions" style="justify-content:flex-end;gap:8px;margin-top:10px;">
+                    <button class="btn btn-outline-primary" type="button" :disabled="exchangePage<=0" @click="loadExchangeCatalog(exchangePage-1)">Trang trước</button>
+                    <button class="btn btn-outline-primary" type="button" :disabled="exchangePage+1>=exchangeTotalPages" @click="loadExchangeCatalog(exchangePage+1)">Trang sau</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop" :class="{open: !!previewImage}" v-if="previewImage" @click.self="closeImagePreview">
+            <div class="admin-modal-panel" style="max-width:360px;text-align:center;">
+                <img :src="previewImage" alt="preview" style="width:300px;height:300px;object-fit:cover;border-radius:10px;">
+            </div>
+        </div>
+        <div class="modal-backdrop" :class="{open: shippingModalOpen}" v-if="shippingModalOpen">
+            <div class="admin-modal-panel" style="max-width:560px;">
+                <div class="table-actions" style="justify-content: space-between; margin-bottom: 10px;">
+                    <h4 style="margin:0;">Cập nhật thông tin giao hàng</h4>
+                    <button class="btn btn-outline-primary" type="button" @click="closeShippingModal">Đóng</button>
+                </div>
+                <div class="form-group">
+                    <label>Địa chỉ giao hàng</label>
+                    <input v-model="shippingForm.address" type="text" placeholder="Nhập địa chỉ giao hàng">
+                </div>
+                <div class="form-group">
+                    <label>Số điện thoại giao hàng</label>
+                    <input v-model="shippingForm.shippingPhone" type="text" placeholder="0xxxxxxxxx">
+                </div>
+                <div v-if="shippingError" class="status-message status-error">{{ shippingError }}</div>
+                <div class="table-actions" style="justify-content:flex-end;gap:8px;">
+                    <button class="btn btn-primary" type="button" :disabled="shippingSaving" @click="submitShippingUpdate">
+                        {{ shippingSaving ? "Đang lưu..." : "Lưu thay đổi" }}
+                    </button>
+                </div>
+            </div>
+        </div>
     </main>
 </template>
+
+<style scoped>
+.exchange-modal-panel{
+    width:min(96vw, 1400px);
+    max-width:1400px !important;
+}
+.exchange-filter-bar{
+    display:grid;
+    grid-template-columns: 2.2fr 1.4fr 1.1fr 1.1fr auto;
+    gap:12px;
+    align-items:stretch;
+    margin-bottom:12px;
+}
+.exchange-filter-item{
+    min-width:0;
+}
+.exchange-filter-item.form-group{
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    gap:6px;
+    margin:0;
+}
+.exchange-filter-item.form-group label{
+    margin:0;
+    line-height:1.2;
+}
+.exchange-filter-action{
+    display:flex;
+    align-items:flex-end;
+    justify-content:flex-start;
+}
+.exchange-filter-btn{
+    height:42px;
+    min-width:92px;
+    white-space:nowrap;
+}
+@media (max-width:1200px){
+    .exchange-modal-panel{
+        width:min(98vw, 1200px);
+    }
+    .exchange-filter-bar{
+        grid-template-columns: repeat(2, minmax(240px, 1fr));
+    }
+    .exchange-filter-action{
+        grid-column: span 2;
+    }
+}
+</style>

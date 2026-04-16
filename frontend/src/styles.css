@@ -1664,6 +1664,25 @@ textarea:focus {
     width: 100%;
 }
 
+.admin-product-filter-form .price-range-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 0;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #4b5563;
+}
+
+.admin-product-filter-form .price-range-item input[type="radio"] {
+    width: auto;
+    margin: 0;
+    flex: 0 0 auto;
+    transform: translateY(-1px);
+}
+
 .admin-product-filter-form .table-actions {
     margin-top: 24px;
     flex-direction: column;
@@ -2605,13 +2624,29 @@ textarea:focus {
 
 .cart-summary-content {
     margin-bottom: 24px;
+    max-width: 520px;
 }
 
 .cart-summary-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 18px;
+    font-size: 20px;
+    line-height: 1.7;
+    gap: 16px;
+}
+
+.cart-summary-row span {
+    color: #1f2937;
+    font-weight: 600;
+    text-align: left;
+}
+
+.cart-summary-row strong {
+    color: #111827;
+    font-weight: 700;
+    text-align: right;
+    margin-left: auto;
 }
 
 .cart-total {

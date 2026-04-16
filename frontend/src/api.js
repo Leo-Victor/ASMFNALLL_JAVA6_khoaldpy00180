@@ -172,6 +172,18 @@ export const api = {
         orderDetail: (id) => request(`/api/order-workflow/detail/${id}`),
         myProducts: () => request("/api/order-workflow/my-product-list"),
         myDeliveredProducts: () => request("/api/order-workflow/my-delivered-product-list"),
+        exchangeCatalog: (params = {}) => request(`/api/order-workflow/exchange-catalog${toQuery(params)}`),
+        exchangeDetail: (orderId, detailId, payload) => request(`/api/order-workflow/${orderId}/details/${detailId}/exchange`, {
+            method: "POST",
+            body: JSON.stringify(payload || {})
+        }),
+        removeDetail: (orderId, detailId) => request(`/api/order-workflow/${orderId}/details/${detailId}`, {method: "DELETE"}),
+        requestRefund: (orderId) => request(`/api/order-workflow/${orderId}/refund-request`, {method: "POST"}),
+        refundRequests: () => request("/api/order-workflow/refund-requests"),
+        updateShipping: (orderId, payload) => request(`/api/order-workflow/${orderId}/shipping`, {
+            method: "PUT",
+            body: JSON.stringify(payload || {})
+        }),
         payosStatus: (orderId) => request(`/api/order-workflow/payos/status${toQuery({orderId})}`)
     },
     chat: {
@@ -201,7 +213,9 @@ export const api = {
             detail: (username) => request(`/api/admin/accounts/${username}`),
             create: (data) => form("/api/admin/accounts", "POST", data),
             update: (username, data) => form(`/api/admin/accounts/${username}`, "PUT", data),
-            remove: (username) => request(`/api/admin/accounts/${username}`, {method: "DELETE"})
+            remove: (username) => request(`/api/admin/accounts/${username}`, {method: "DELETE"}),
+            updateRole: (username, roleId) => request(`/api/admin/accounts/${username}/role${toQuery({roleId})}`, {method: "PUT"}),
+            updateActivation: (username, activated) => request(`/api/admin/accounts/${username}/activation${toQuery({activated})}`, {method: "PUT"})
         },
         categories: {
             list: () => request("/api/admin/categories"),
@@ -222,7 +236,9 @@ export const api = {
             detail: (id) => request(`/api/admin/orders/${id}`),
             updateStatus: (id, status) => request(`/api/admin/orders/${id}/status${toQuery({status})}`, {method: "PUT"}),
             remove: (id) => request(`/api/admin/orders/${id}`, {method: "DELETE"}),
-            cancelPayos: (orderCode) => request(`/api/admin/orders/payos/cancel${toQuery({orderCode})}`, {method: "POST"})
+            cancelPayos: (orderCode) => request(`/api/admin/orders/payos/cancel${toQuery({orderCode})}`, {method: "POST"}),
+            approveRefund: (id) => request(`/api/admin/orders/${id}/refund/approve`, {method: "POST"}),
+            declineRefund: (id, reason) => request(`/api/admin/orders/${id}/refund/decline${toQuery({reason})}`, {method: "POST"})
         },
         reports: {
             revenue: (params) => request(`/api/admin/reports/revenue${toQuery(params)}`),

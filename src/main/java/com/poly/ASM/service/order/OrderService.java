@@ -19,5 +19,7 @@ public interface OrderService {
 
     Order update(Order order);
 
+    void reserveInventoryForOrder(Long orderId);
+
     void deleteById(Long id);
 }

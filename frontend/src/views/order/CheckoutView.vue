@@ -44,6 +44,11 @@ const mapRef = ref(null);
 const geocodeMessage = ref("");
 const estimatedDeliveryText = ref("");
 const placing = ref(false);
+const noticeOpen = ref(false);
+const noticeText = ref("");
+const noticeType = ref("error");
+const lastNoticeText = ref("");
+const pendingRedirect = ref("");
 const addressSuggestions = ref([]);
 let goong = null;
 let goongMap = null;
@@ -59,6 +64,29 @@ let manualAddressTyping = false;
 const lastGeoWarning = ref("");
 const selectedProvinceName = () => provinces.value.find((item) => item.code === selectedProvinceCode.value)?.name || "";
 const selectedWardName = () => wards.value.find((item) => item.code === selectedWardCode.value)?.name || "";
+const openNotice = (text, type = "error") => {
+    const message = String(text || "").trim();
+    if (!message) return;
+    noticeText.value = message;
+    noticeType.value = type;
+    noticeOpen.value = true;
+    lastNoticeText.value = message;
+};
+const closeNotice = () => {
+    noticeOpen.value = false;
+    if (noticeType.value === "success" && pendingRedirect.value) {
+        const target = pendingRedirect.value;
+        pendingRedirect.value = "";
+        router.push(target);
+    }
+};
+const shouldShowErrorNotice = (text) => {
+    const message = String(text || "").trim().toLowerCase();
+    if (!message) return false;
+    if (message.includes("không tìm thấy chính xác số nhà")) return false;
+    if (message.includes("đã chọn vị trí gần nhất trên tuyến")) return false;
+    return true;
+};
 const syncAddress = () => {
     const parts = [
         (form.addressDetail || "").trim(),
@@ -831,6 +859,20 @@ onMounted(async () => {
         geocodeMessage.value = "Không tải được danh mục địa chỉ hành chính.";
     }
 });
+watch(error, (value) => {
+    const message = String(value || "").trim();
+    if (!message || message === lastNoticeText.value || !shouldShowErrorNotice(message)) {
+        return;
+    }
+    openNotice(message, "error");
+});
+watch(geocodeMessage, (value) => {
+    const message = String(value || "").trim();
+    if (!message || message === lastNoticeText.value || !shouldShowErrorNotice(message)) {
+        return;
+    }
+    openNotice(message, "error");
+});
 const submitCheckout = async () => {
     if (!form.provinceCode || !form.wardCode) {
         geocodeMessage.value = "Vui lòng chọn đầy đủ tỉnh/thành và phường/xã.";
@@ -861,10 +903,12 @@ const submitCheckout = async () => {
         return;
     }
     if (nextAction === "BANK_TRANSFER" || (form.paymentMethod || "").toUpperCase() === "BANK") {
-        await router.push(`/order/bank-transfer?id=${orderId}`);
-        return;
+        pendingRedirect.value = `/order/bank-transfer?id=${orderId}`;
+    } else {
+        pendingRedirect.value = `/order/order-detail?id=${orderId}`;
     }
-    await router.push(`/order/order-detail?id=${orderId}`);
+    openNotice(`Đặt hàng thành công! Mã đơn hàng: ${orderId}`, "success");
+    return;
 };
 const toDateIso = (date) => {
     const year = date.getFullYear();
@@ -937,9 +981,7 @@ const calculateDeliveryEstimate = async (destinationLat, destinationLng) => {
     <main class="checkout-page">
         <div class="container">
             <h1 class="page-title">Thanh toán đơn hàng</h1>
-            
-            <div v-if="error" class="status-message status-error">{{ error }}</div>
-            
+
             <div class="checkout-layout">
                 <div class="checkout-main">
                     <div class="checkout-section">
@@ -1010,8 +1052,7 @@ const calculateDeliveryEstimate = async (destinationLat, destinationLng) => {
                             Goong: {{ goongEnabled ? "ON" : "OFF" }}
                         </div>
                         
-                        <div v-if="geocodeMessage" class="status-message status-error">{{ geocodeMessage }}</div>
-                        
+
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Latitude</label>
@@ -1040,9 +1081,6 @@ const calculateDeliveryEstimate = async (destinationLat, destinationLng) => {
                         <button class="btn btn-primary btn--block" type="submit" :disabled="placing">{{ placing ? "Đang xử lý..." : "Đặt hàng ngay" }}</button>
                     </form>
                     
-                    <div v-if="result" class="status-message status-success">
-                        Đặt hàng thành công! Mã đơn hàng: {{ result.data?.orderId }}
-                    </div>
                 </div>
                 
                 <div class="checkout-sidebar">
@@ -1066,6 +1104,17 @@ const calculateDeliveryEstimate = async (destinationLat, destinationLng) => {
                             <strong>{{ money(checkout.totalPrice) }} VNĐ</strong>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop" :class="{open: noticeOpen}" v-if="noticeOpen" @click.self="closeNotice">
+            <div class="admin-modal-panel checkout-notice-panel">
+                <h4 class="checkout-notice-title" :class="noticeType === 'success' ? 'is-success' : 'is-error'">
+                    {{ noticeType === "success" ? "Thông báo" : "Lỗi" }}
+                </h4>
+                <p class="checkout-notice-text">{{ noticeText }}</p>
+                <div class="checkout-notice-actions">
+                    <button class="btn btn-primary" type="button" @click="closeNotice">Đã hiểu</button>
                 </div>
             </div>
         </div>
@@ -1098,5 +1147,30 @@ const calculateDeliveryEstimate = async (destinationLat, destinationLng) => {
 
 .order-address-suggestion-item:hover {
     background: #f7f7f7;
+}
+.checkout-notice-panel{
+    max-width: 520px;
+}
+.checkout-notice-title{
+    margin: 0;
+    font-size: 22px;
+    font-weight: 800;
+}
+.checkout-notice-title.is-error{
+    color:#b91c1c;
+}
+.checkout-notice-title.is-success{
+    color:#166534;
+}
+.checkout-notice-text{
+    margin: 10px 0 0;
+    font-size: 16px;
+    color: #1f2937;
+    line-height: 1.6;
+}
+.checkout-notice-actions{
+    margin-top: 16px;
+    display: flex;
+    justify-content: flex-end;
 }
 </style>

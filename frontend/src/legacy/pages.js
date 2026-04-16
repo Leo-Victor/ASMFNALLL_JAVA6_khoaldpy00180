@@ -1,5 +1,6 @@
-import {onMounted, reactive, ref} from "vue";
+import {computed, onMounted, reactive, ref} from "vue";
 import {api} from "@/api";
+import {isValidVnPhone10, normalizePhone} from "@/utils/phone";
 
 const money = (value) => {
     if (value === null || value === undefined || value === "") {
@@ -597,8 +598,9 @@ const SignUpPage = {
 
 const EditProfilePage = {
     setup() {
-        const form = reactive({fullname: "", email: "", phone: "", address: "", photo: "", photoFile: null});
+        const form = reactive({fullname: "", email: "", phone: "", address: "", photo: "", accountType: "NORMAL", photoFile: null});
         const message = ref("");
+        const isGoogleAccount = computed(() => String(form.accountType || "").toUpperCase() === "GOOGLE");
         const onPhotoChange = (event) => {
             form.photoFile = event?.target?.files?.[0] || null;
         };
@@ -609,10 +611,17 @@ const EditProfilePage = {
             form.phone = me.phone || "";
             form.address = me.address || "";
             form.photo = me.photo || "";
+            form.accountType = me.accountType || "NORMAL";
             form.photoFile = null;
         };
         const save = async () => {
             try {
+                const normalizedPhone = normalizePhone(form.phone);
+                if (!isValidVnPhone10(normalizedPhone)) {
+                    message.value = "Số điện thoại phải gồm 10 số, bắt đầu bằng 0 và không được là 10 số 0.";
+                    return;
+                }
+                form.phone = normalizedPhone;
                 await api.account.updateProfile(form);
                 message.value = "Cập nhật thành công";
                 await load();
@@ -621,7 +630,7 @@ const EditProfilePage = {
             }
         };
         onMounted(load);
-        return {form, message, save, onPhotoChange};
+        return {form, message, save, onPhotoChange, isGoogleAccount};
     },
     template: `
       <div class="row justify-content-center"><div class="col-md-7"><div class="card shadow-sm"><div class="card-header">Hồ sơ cá nhân</div><div class="card-body">
@@ -780,7 +789,7 @@ const AdminAccountPage = {
             await load();
         };
         onMounted(load);
-        return {rows, roles, form, modalOpen, editing, msg, edit, openCreate, closeModal, onPhotoChange, save, remove};
+        return {rows, roles, form, modalOpen, editing, msg, load, edit, openCreate, closeModal, onPhotoChange, save, remove};
     },
     template: `
       <div>
@@ -1041,7 +1050,8 @@ const AdminOrderPage = {
         const paging = reactive({
             pending: {page: 0, size: 10, totalPages: 0, totalElements: 0},
             placed: {page: 0, size: 10, totalPages: 0, totalElements: 0},
-            delivered: {page: 0, size: 10, totalPages: 0, totalElements: 0}
+            delivered: {page: 0, size: 10, totalPages: 0, totalElements: 0},
+            refund: {page: 0, size: 10, totalPages: 0, totalElements: 0}
         });
         const load = async (tab = "pending") => {
             const state = paging[tab] || paging.pending;

@@ -165,6 +165,45 @@ public class AccountAController {
         return ResponseEntity.ok(ApiResponse.success("Xóa tài khoản thành công", null));
     }
 
+    @PutMapping("/{username}/role")
+    public ResponseEntity<ApiResponse<?>> updateRole(@PathVariable("username") String username,
+                                                     @RequestParam("roleId") String roleId) {
+        Account account = accountService.findByUsername(username)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản"));
+        if (Boolean.TRUE.equals(account.getIsDelete())) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản");
+        }
+        String normalizedRoleId = roleId == null ? "" : roleId.trim().toUpperCase();
+        if (normalizedRoleId.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Vai trò không hợp lệ");
+        }
+        authorityService.deleteByAccountUsername(username);
+        Role role = roleService.findById(normalizedRoleId)
+                .orElseGet(() -> roleService.create(new Role(normalizedRoleId, normalizedRoleId, null)));
+        Authority authority = new Authority();
+        authority.setAccount(account);
+        authority.setRole(role);
+        authorityService.create(authority);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật vai trò thành công", Map.of("username", username, "roleId", normalizedRoleId)));
+    }
+
+    @PutMapping("/{username}/activation")
+    public ResponseEntity<ApiResponse<?>> updateActivation(@PathVariable("username") String username,
+                                                           @RequestParam("activated") Boolean activated) {
+        Account currentUser = authService.getUser();
+        if (currentUser != null && currentUser.getUsername().equals(username)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Không thể tự khoá tài khoản đang đăng nhập");
+        }
+        Account account = accountService.findByUsername(username)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản"));
+        if (Boolean.TRUE.equals(account.getIsDelete())) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản");
+        }
+        account.setActivated(activated != null ? activated : true);
+        accountService.update(account);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái tài khoản thành công", Map.of("username", username, "activated", account.getActivated())));
+    }
+
     private String saveImage(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             return null;
@@ -195,7 +234,18 @@ public class AccountAController {
         map.put("photo", account.getPhoto());
         map.put("activated", account.getActivated());
         map.put("roleId", resolveRoleId(account.getUsername()));
+        map.put("accountType", resolveAccountType(account));
         return map;
+    }
+
+    private String resolveAccountType(Account account) {
+        String photo = account.getPhoto() == null ? "" : account.getPhoto().trim();
+        String phone = account.getPhone() == null ? "" : account.getPhone().trim();
+        String address = account.getAddress() == null ? "" : account.getAddress().trim();
+        boolean looksGoogle = (photo.startsWith("http://") || photo.startsWith("https://"))
+                && "0000000000".equals(phone)
+                && "Chưa cập nhật".equalsIgnoreCase(address);
+        return looksGoogle ? "GOOGLE" : "NORMAL";
     }
 
     private String resolveRoleId(String username) {

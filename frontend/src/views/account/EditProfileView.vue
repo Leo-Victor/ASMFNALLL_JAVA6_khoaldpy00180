@@ -2,7 +2,7 @@
 import {EditProfilePage} from "@/legacy/pages";
 import {computed} from "vue";
 
-const {form, message, save, onPhotoChange} = EditProfilePage.setup();
+const {form, message, save, onPhotoChange, isGoogleAccount} = EditProfilePage.setup();
 const backendUrl = import.meta.env.VITE_BACKEND_URL || "";
 const defaultAvatar = computed(() => {
     const seed = encodeURIComponent(String(form.fullname || "User"));
@@ -64,7 +64,7 @@ const photoFileName = computed(() => form.photoFile?.name || "");
                 </div>
                 <div class="profile-actions">
                     <button class="btn profile-save-btn" type="submit">Lưu Thay Đổi</button>
-                    <router-link class="btn btn-outline-primary" to="/account/change-password">Đổi mật khẩu</router-link>
+                    <router-link v-if="!isGoogleAccount" class="btn btn-outline-primary" to="/account/change-password">Đổi mật khẩu</router-link>
                 </div>
             </div>
         </form>

@@ -14,6 +14,8 @@ import com.poly.ASM.service.notification.NotificationService;
 import com.poly.ASM.service.order.OrderDetailService;
 import com.poly.ASM.service.order.OrderService;
 import com.poly.ASM.service.payment.PayosPaymentService;
+import com.poly.ASM.service.product.CategoryService;
+import com.poly.ASM.service.product.ProductService;
 import com.poly.ASM.service.product.ProductSizeService;
 import com.poly.ASM.service.review.ProductReviewService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,10 +26,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.domain.Page;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -52,6 +57,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/order-workflow")
@@ -64,6 +70,8 @@ public class OrderController {
     private final CartService cartService;
     private final AuthService authService;
     private final ProductSizeService productSizeService;
+    private final ProductService productService;
+    private final CategoryService categoryService;
     private final ProductReviewService productReviewService;
     private final NotificationService notificationService;
     private final PayosPaymentService payosPaymentService;
@@ -144,6 +152,10 @@ public class OrderController {
         if (resolvedShippingPhone == null || resolvedShippingPhone.isBlank()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Vui lòng nhập số điện thoại giao hàng.", null));
         }
+        resolvedShippingPhone = resolvedShippingPhone.replaceAll("\\s+", "");
+        if (!isValidShippingPhone(resolvedShippingPhone)) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Số điện thoại phải gồm 10 số, bắt đầu bằng 0 và không được là 10 số 0.", null));
+        }
         Order savedOrder;
         if (bankPayment) {
             if (reusablePendingOrder != null) {
@@ -194,6 +206,9 @@ public class OrderController {
             detail.setSizeName(item.getSizeName());
             orderDetailService.create(detail);
             
+        }
+        if (!bankPayment) {
+            orderService.reserveInventoryForOrder(savedOrder.getId());
         }
         if (!bankPayment) {
             cartService.clearCart();
@@ -492,6 +507,39 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết đơn hàng thành công", data));
     }
 
+    @PutMapping("/{orderId}/shipping")
+    @Transactional
+    public ResponseEntity<ApiResponse<?>> updateShipping(@PathVariable("orderId") Long orderId,
+                                                         @RequestBody Map<String, Object> payload) {
+        Account user = authService.getUser();
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
+        }
+        Optional<Order> orderOpt = orderService.findById(orderId);
+        if (orderOpt.isEmpty() || orderOpt.get().getAccount() == null || !user.getUsername().equals(orderOpt.get().getAccount().getUsername())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Không có quyền truy cập đơn hàng", null));
+        }
+        Order order = orderOpt.get();
+        String status = String.valueOf(order.getStatus() == null ? "" : order.getStatus()).trim();
+        if (!"PLACED_UNPAID".equals(status) && !"PLACED_PAID".equals(status)) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Chỉ cho phép sửa thông tin giao hàng với đơn đã đặt.", null));
+        }
+        String address = String.valueOf(payload.getOrDefault("address", "")).trim();
+        String shippingPhone = String.valueOf(payload.getOrDefault("shippingPhone", "")).trim();
+        if (address.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Địa chỉ giao hàng không hợp lệ.", null));
+        }
+        if (!isValidShippingPhone(shippingPhone)) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Số điện thoại phải gồm 10 số, bắt đầu bằng 0 và không được là 10 số 0.", null));
+        }
+        order.setAddress(address);
+        orderService.update(order);
+        updateOrderShippingPhone(orderId, shippingPhone);
+        Map<String, Object> data = new HashMap<>();
+        data.put("order", toOrderData(order));
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật thông tin giao hàng thành công.", data));
+    }
+
     @PostMapping("/retry-payment/{id}")
     public ResponseEntity<ApiResponse<?>> retryPayment(@PathVariable("id") Long id) {
         Account user = authService.getUser();
@@ -557,11 +605,302 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm đã mua (đã giao) thành công", toOrderDetailData(delivered)));
     }
 
+    @DeleteMapping("/{orderId}/details/{detailId}")
+    @Transactional
+    public ResponseEntity<ApiResponse<?>> deleteOrderDetail(@PathVariable("orderId") Long orderId,
+                                                            @PathVariable("detailId") Long detailId) {
+        Account user = authService.getUser();
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
+        }
+        Optional<Order> orderOpt = orderService.findById(orderId);
+        if (orderOpt.isEmpty() || orderOpt.get().getAccount() == null || !user.getUsername().equals(orderOpt.get().getAccount().getUsername())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Không có quyền truy cập đơn hàng", null));
+        }
+        Order order = orderOpt.get();
+        if (!"PLACED_UNPAID".equals(order.getStatus())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Chỉ hỗ trợ xoá sản phẩm với đơn chưa thanh toán.", null));
+        }
+        Optional<OrderDetail> detailOpt = orderDetailService.findById(detailId);
+        if (detailOpt.isEmpty() || detailOpt.get().getOrder() == null || !orderId.equals(detailOpt.get().getOrder().getId())) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("Không tìm thấy dòng sản phẩm trong đơn hàng.", null));
+        }
+        OrderDetail deletingDetail = detailOpt.get();
+        Integer productId = deletingDetail.getProduct() == null ? null : deletingDetail.getProduct().getId();
+        Integer sizeId = deletingDetail.getSizeId();
+        Integer quantity = deletingDetail.getQuantity();
+        if (productId != null && sizeId != null && quantity != null && quantity > 0) {
+            productSizeService.findByProductIdAndSizeId(productId, sizeId).ifPresent(ps -> {
+                int current = ps.getQuantity() == null ? 0 : ps.getQuantity();
+                ps.setQuantity(current + quantity);
+                productSizeService.save(ps);
+            });
+        }
+        orderDetailService.deleteById(detailId);
+        List<OrderDetail> remaining = orderDetailService.findByOrderId(orderId);
+        if (remaining.isEmpty()) {
+            notificationService.deleteByOrderId(orderId);
+            orderService.deleteById(orderId);
+            return ResponseEntity.ok(ApiResponse.success("Đã xoá sản phẩm cuối cùng, đơn hàng đã được xoá.", Map.of("orderDeleted", true)));
+        }
+        BigDecimal totalAmount = calculateOrderTotal(remaining);
+        Map<String, Object> data = new HashMap<>();
+        data.put("orderDeleted", false);
+        data.put("order", toOrderData(order));
+        data.put("details", toOrderDetailData(remaining));
+        data.put("totalAmount", totalAmount);
+        return ResponseEntity.ok(ApiResponse.success("Đã xoá sản phẩm khỏi đơn hàng.", data));
+    }
+
+    @PostMapping("/{orderId}/details/{detailId}/exchange")
+    @Transactional
+    public ResponseEntity<ApiResponse<?>> exchangeOrderDetail(@PathVariable("orderId") Long orderId,
+                                                              @PathVariable("detailId") Long detailId,
+                                                              @RequestBody Map<String, Object> payload) {
+        Account user = authService.getUser();
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
+        }
+        Optional<Order> orderOpt = orderService.findById(orderId);
+        if (orderOpt.isEmpty() || orderOpt.get().getAccount() == null || !user.getUsername().equals(orderOpt.get().getAccount().getUsername())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Không có quyền truy cập đơn hàng", null));
+        }
+        Order order = orderOpt.get();
+        if (!"PLACED_UNPAID".equals(order.getStatus())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Chỉ hỗ trợ đổi sản phẩm với đơn chưa thanh toán.", null));
+        }
+        Optional<OrderDetail> detailOpt = orderDetailService.findById(detailId);
+        if (detailOpt.isEmpty() || detailOpt.get().getOrder() == null || !orderId.equals(detailOpt.get().getOrder().getId())) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("Không tìm thấy dòng sản phẩm trong đơn hàng.", null));
+        }
+        Integer productId = toInt(payload.get("productId"));
+        Integer sizeId = toInt(payload.get("sizeId"));
+        Integer quantity = toInt(payload.get("quantity"));
+        if (productId == null || sizeId == null || quantity == null || quantity <= 0) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Dữ liệu đổi sản phẩm không hợp lệ.", null));
+        }
+        Optional<ProductSize> productSizeOpt = productSizeService.findByProductIdAndSizeId(productId, sizeId);
+        if (productSizeOpt.isEmpty() || productSizeOpt.get().getQuantity() == null) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Không tìm thấy tồn kho của size đã chọn.", null));
+        }
+        Optional<Product> productOpt = productService.findById(productId);
+        if (productOpt.isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Không tìm thấy sản phẩm cần đổi.", null));
+        }
+        Product product = productOpt.get();
+        OrderDetail detail = detailOpt.get();
+        Integer oldProductId = detail.getProduct() == null ? null : detail.getProduct().getId();
+        Integer oldSizeId = detail.getSizeId();
+        Integer oldQuantity = detail.getQuantity() == null ? 0 : detail.getQuantity();
+        if (oldProductId == null || oldSizeId == null || oldQuantity <= 0) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Dữ liệu sản phẩm hiện tại trong đơn không hợp lệ.", null));
+        }
+        ProductSize newProductSize = productSizeOpt.get();
+        boolean sameProductAndSize = oldProductId.equals(productId) && oldSizeId.equals(sizeId);
+        if (sameProductAndSize) {
+            int available = (newProductSize.getQuantity() == null ? 0 : newProductSize.getQuantity()) + oldQuantity;
+            if (quantity > available) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("Số lượng vượt quá tồn kho của size đã chọn.", null));
+            }
+            newProductSize.setQuantity(available - quantity);
+            productSizeService.save(newProductSize);
+        } else {
+            int newStock = newProductSize.getQuantity() == null ? 0 : newProductSize.getQuantity();
+            if (newStock < quantity) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("Số lượng vượt quá tồn kho của size đã chọn.", null));
+            }
+            Optional<ProductSize> oldProductSizeOpt = productSizeService.findByProductIdAndSizeId(oldProductId, oldSizeId);
+            if (oldProductSizeOpt.isPresent() && oldProductSizeOpt.get().getQuantity() != null) {
+                ProductSize oldProductSize = oldProductSizeOpt.get();
+                oldProductSize.setQuantity(oldProductSize.getQuantity() + oldQuantity);
+                productSizeService.save(oldProductSize);
+            }
+            newProductSize.setQuantity(newStock - quantity);
+            productSizeService.save(newProductSize);
+        }
+        detail.setProduct(product);
+        detail.setPrice(product.getPrice());
+        detail.setQuantity(quantity);
+        detail.setSizeId(sizeId);
+        detail.setSizeName(newProductSize.getSize() == null ? "" : newProductSize.getSize().getName());
+        orderDetailService.update(detail);
+
+        List<OrderDetail> updated = orderDetailService.findByOrderId(orderId);
+        BigDecimal totalAmount = calculateOrderTotal(updated);
+        Map<String, Object> data = new HashMap<>();
+        data.put("order", toOrderData(order));
+        data.put("details", toOrderDetailData(updated));
+        data.put("totalAmount", totalAmount);
+        return ResponseEntity.ok(ApiResponse.success("Đổi sản phẩm thành công.", data));
+    }
+
+    @GetMapping("/exchange-catalog")
+    public ResponseEntity<ApiResponse<?>> exchangeCatalog(@RequestParam(value = "keyword", required = false) String keyword,
+                                                          @RequestParam(value = "categoryId", required = false) String categoryId,
+                                                          @RequestParam(value = "minPrice", required = false) BigDecimal minPrice,
+                                                          @RequestParam(value = "maxPrice", required = false) BigDecimal maxPrice,
+                                                          @RequestParam(value = "sort", required = false) String sort,
+                                                          @RequestParam(value = "page", required = false, defaultValue = "0") Integer page,
+                                                          @RequestParam(value = "size", required = false, defaultValue = "10") Integer size) {
+        Account user = authService.getUser();
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
+        }
+        int safePage = page == null || page < 0 ? 0 : page;
+        int safeSize = size == null || size <= 0 ? 10 : Math.min(size, 30);
+        Page<Product> result = productService.searchWithFiltersPage(keyword, categoryId, minPrice, maxPrice, sort, safePage, safeSize);
+        List<Product> products = result.getContent();
+        List<Integer> productIds = products.stream().map(Product::getId).toList();
+        Map<Integer, List<Map<String, Object>>> sizesByProduct = new HashMap<>();
+        for (ProductSize ps : productSizeService.findByProductIds(productIds)) {
+            if (ps.getProduct() == null || ps.getProduct().getId() == null || ps.getSize() == null) {
+                continue;
+            }
+            Integer pid = ps.getProduct().getId();
+            sizesByProduct.computeIfAbsent(pid, k -> new ArrayList<>()).add(Map.of(
+                    "sizeId", ps.getSize().getId(),
+                    "sizeName", ps.getSize().getName(),
+                    "stock", ps.getQuantity() == null ? 0 : ps.getQuantity()
+            ));
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Product product : products) {
+            BigDecimal finalPrice = calcFinalPrice(product.getPrice(), product.getDiscount());
+            Map<String, Object> row = new HashMap<>();
+            row.put("id", product.getId());
+            row.put("name", product.getName());
+            row.put("image", product.getImage());
+            row.put("price", product.getPrice());
+            row.put("discount", product.getDiscount());
+            row.put("finalPrice", finalPrice);
+            row.put("categoryName", product.getCategory() == null ? "" : product.getCategory().getName());
+            row.put("sizes", sizesByProduct.getOrDefault(product.getId(), List.of()));
+            rows.add(row);
+        }
+        Map<String, Object> data = new HashMap<>();
+        data.put("rows", rows);
+        data.put("categories", categoryService.findAll());
+        data.put("page", result.getNumber());
+        data.put("size", safeSize);
+        data.put("totalPages", result.getTotalPages());
+        data.put("totalElements", result.getTotalElements());
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm đổi hàng thành công.", data));
+    }
+
+    @PostMapping("/{orderId}/refund-request")
+    @Transactional
+    public ResponseEntity<ApiResponse<?>> requestRefund(@PathVariable("orderId") Long orderId) {
+        Account user = authService.getUser();
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
+        }
+        Optional<Order> orderOpt = orderService.findById(orderId);
+        if (orderOpt.isEmpty() || orderOpt.get().getAccount() == null || !user.getUsername().equals(orderOpt.get().getAccount().getUsername())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Không có quyền truy cập đơn hàng", null));
+        }
+        Order order = orderOpt.get();
+        if (!"PLACED_PAID".equals(order.getStatus())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Chỉ cho phép yêu cầu hoàn tiền với đơn đã thanh toán ở trạng thái đã đặt.", null));
+        }
+        ensureRefundRequestTable();
+        jdbcTemplate.update("""
+                IF EXISTS (SELECT 1 FROM dbo.order_refund_requests WHERE order_id = ?)
+                BEGIN
+                    UPDATE dbo.order_refund_requests
+                    SET status = 'PENDING', decline_reason = NULL, decided_at = NULL
+                    WHERE order_id = ?
+                END
+                ELSE
+                BEGIN
+                    INSERT INTO dbo.order_refund_requests(order_id, username, status, decline_reason, created_at, decided_at)
+                    VALUES(?, ?, 'PENDING', NULL, GETDATE(), NULL)
+                END
+                """, orderId, orderId, orderId, user.getUsername());
+        order.setStatus("REFUND_REQUEST");
+        orderService.update(order);
+        notificationService.notifyRefundRequestForAdmins(order);
+        return ResponseEntity.ok(ApiResponse.success("Đã gửi yêu cầu hoàn tiền.", Map.of("orderId", orderId, "status", "PENDING")));
+    }
+
+    @GetMapping("/refund-requests")
+    public ResponseEntity<ApiResponse<?>> myRefundRequests() {
+        Account user = authService.getUser();
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
+        }
+        ensureRefundRequestTable();
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+                SELECT order_id, status, decline_reason, created_at, decided_at
+                FROM dbo.order_refund_requests
+                WHERE username = ?
+                ORDER BY created_at DESC
+                """, user.getUsername());
+        List<Map<String, Object>> data = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("orderId", row.get("order_id"));
+            item.put("status", row.get("status"));
+            item.put("declineReason", row.get("decline_reason"));
+            item.put("createdAt", row.get("created_at"));
+            item.put("decidedAt", row.get("decided_at"));
+            data.add(item);
+        }
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách yêu cầu hoàn tiền thành công.", data));
+    }
+
     private boolean isDeliveredStatus(String status) {
         if (status == null) {
             return false;
         }
         return "DELIVERED_SUCCESS".equals(status) || "DONE".equals(status);
+    }
+
+    private Integer toInt(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value).trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private BigDecimal calcFinalPrice(BigDecimal price, BigDecimal discount) {
+        BigDecimal p = price == null ? BigDecimal.ZERO : price;
+        BigDecimal d = discount == null ? BigDecimal.ZERO : discount;
+        if (d.compareTo(BigDecimal.ZERO) <= 0) {
+            return p;
+        }
+        BigDecimal discountAmount = p.multiply(d).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal finalPrice = p.subtract(discountAmount);
+        return finalPrice.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : finalPrice;
+    }
+
+    private void ensureRefundRequestTable() {
+        try {
+            jdbcTemplate.execute("""
+                    IF OBJECT_ID('dbo.order_refund_requests', 'U') IS NULL
+                    BEGIN
+                        CREATE TABLE dbo.order_refund_requests (
+                            id BIGINT IDENTITY(1,1) PRIMARY KEY,
+                            order_id BIGINT NOT NULL,
+                            username VARCHAR(50) NOT NULL,
+                            status VARCHAR(30) NOT NULL,
+                            decline_reason NVARCHAR(MAX) NULL,
+                            created_at DATETIME NOT NULL DEFAULT GETDATE(),
+                            decided_at DATETIME NULL
+                        );
+                        CREATE UNIQUE INDEX idx_refund_order_unique ON dbo.order_refund_requests(order_id);
+                        CREATE INDEX idx_refund_username ON dbo.order_refund_requests(username);
+                        CREATE INDEX idx_refund_status ON dbo.order_refund_requests(status);
+                    END
+                    """);
+        } catch (Exception ignored) {
+        }
     }
 
     private BigDecimal calculateOrderTotal(List<OrderDetail> details) {
@@ -720,6 +1059,17 @@ public class OrderController {
             return second.trim();
         }
         return null;
+    }
+
+    private boolean isValidShippingPhone(String phone) {
+        if (phone == null) {
+            return false;
+        }
+        String normalized = phone.replaceAll("\\s+", "").trim();
+        if (!normalized.matches("^0\\d{9}$")) {
+            return false;
+        }
+        return !"0000000000".equals(normalized);
     }
 
     private Map<String, Object> toBankTransferResponseData(Order order,

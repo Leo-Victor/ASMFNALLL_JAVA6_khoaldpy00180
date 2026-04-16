@@ -22,6 +22,8 @@ public interface CartItemRepository extends JpaRepository<CartItemEntity, Long> 
 
     Optional<CartItemEntity> findByAccountUsernameAndProductIdAndSizeId(String username, Integer productId, Integer sizeId);
 
+    List<CartItemEntity> findAllByAccountUsernameAndProductIdAndSizeIdOrderByIdAsc(String username, Integer productId, Integer sizeId);
+
     @Query("""
             select count(distinct ci.product.id)
             from CartItemEntity ci

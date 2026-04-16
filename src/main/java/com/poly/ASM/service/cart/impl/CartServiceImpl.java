@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -284,7 +285,7 @@ public class CartServiceImpl implements CartService {
 
     private List<CartItem> getUserCartItems(String username) {
         var entities = cartItemRepository.findByUsernameWithRefs(username);
-        List<CartItem> items = new ArrayList<>();
+        LinkedHashMap<String, CartItem> merged = new LinkedHashMap<>();
         for (var ci : entities) {
             var p = ci.getProduct();
             var s = ci.getSize();
@@ -294,19 +295,31 @@ public class CartServiceImpl implements CartService {
                         .map(ProductSize::getQuantity)
                         .orElse(null);
             }
-            items.add(new CartItem(
-                    p != null ? p.getId() : null,
-                    p != null ? p.getName() : null,
-                    s != null ? s.getId() : null,
-                    s != null ? s.getName() : null,
-                    p != null ? p.getPrice() : null,
-                    p != null ? p.getDiscount() : null,
-                    ci.getQuantity(),
-                    p != null ? p.getImage() : null,
-                    stock
-            ));
+            Integer pid = p != null ? p.getId() : null;
+            Integer sid = s != null ? s.getId() : null;
+            if (pid == null || sid == null) {
+                continue;
+            }
+            String key = pid + "::" + sid;
+            CartItem existing = merged.get(key);
+            if (existing == null) {
+                merged.put(key, new CartItem(
+                        pid,
+                        p.getName(),
+                        sid,
+                        s.getName(),
+                        p.getPrice(),
+                        p.getDiscount(),
+                        ci.getQuantity(),
+                        p.getImage(),
+                        stock
+                ));
+            } else {
+                int nextQty = (existing.getQuantity() == null ? 0 : existing.getQuantity()) + (ci.getQuantity() == null ? 0 : ci.getQuantity());
+                existing.setQuantity(nextQty);
+            }
         }
-        return items;
+        return new ArrayList<>(merged.values());
     }
 
     private boolean addToUserCart(String username, Integer productId, Integer sizeId, Integer quantity) {
@@ -322,15 +335,19 @@ public class CartServiceImpl implements CartService {
         }
         int stock = productSize.get().getQuantity();
 
-        var existingOpt = cartItemRepository.findByAccountUsernameAndProductIdAndSizeId(username, productId, sizeId);
-        if (existingOpt.isPresent()) {
-            var existing = existingOpt.get();
-            int next = (existing.getQuantity() != null ? existing.getQuantity() : 0) + quantity;
+        var existingItems = cartItemRepository.findAllByAccountUsernameAndProductIdAndSizeIdOrderByIdAsc(username, productId, sizeId);
+        if (!existingItems.isEmpty()) {
+            var existing = existingItems.get(0);
+            int current = existingItems.stream().mapToInt(x -> x.getQuantity() == null ? 0 : x.getQuantity()).sum();
+            int next = current + quantity;
             if (next > stock) {
                 return false;
             }
             existing.setQuantity(next);
             cartItemRepository.save(existing);
+            if (existingItems.size() > 1) {
+                cartItemRepository.deleteAll(existingItems.subList(1, existingItems.size()));
+            }
             return true;
         }
 
@@ -365,13 +382,16 @@ public class CartServiceImpl implements CartService {
         }
         int stock = productSize.get().getQuantity();
 
-        var existingOpt = cartItemRepository.findByAccountUsernameAndProductIdAndSizeId(username, productId, sizeId);
-        if (existingOpt.isPresent()) {
-            var existing = existingOpt.get();
-            int current = existing.getQuantity() != null ? existing.getQuantity() : 0;
+        var existingItems = cartItemRepository.findAllByAccountUsernameAndProductIdAndSizeIdOrderByIdAsc(username, productId, sizeId);
+        if (!existingItems.isEmpty()) {
+            var existing = existingItems.get(0);
+            int current = existingItems.stream().mapToInt(x -> x.getQuantity() == null ? 0 : x.getQuantity()).sum();
             int merged = current + quantity;
             existing.setQuantity(Math.min(merged, stock));
             cartItemRepository.save(existing);
+            if (existingItems.size() > 1) {
+                cartItemRepository.deleteAll(existingItems.subList(1, existingItems.size()));
+            }
             return;
         }
 

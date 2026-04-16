@@ -455,7 +455,11 @@ watch(() => [route.query.customerId, route.query.productId], async () => {
 .price-final{font-size:15px;font-weight:900;color:#dc2626}
 .price-origin{font-size:12px;color:#9ca3af;text-decoration:line-through}
 .price-discount-badge{font-size:11px;font-weight:800;color:#fff;background:#ef4444;border-radius:999px;padding:3px 8px;line-height:1}
-.right-history{flex:1;min-height:0;overflow:auto;padding:12px;background:#f8fafc;display:flex;flex-direction:column;gap:10px}
+.right-history{flex:1;min-height:0;overflow-y:scroll;overflow-x:hidden;padding:12px;background:#f8fafc;display:flex;flex-direction:column;gap:10px}
+.right-history::-webkit-scrollbar{width:10px}
+.right-history::-webkit-scrollbar-track{background:#e5e7eb;border-radius:999px}
+.right-history::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:999px}
+.right-history::-webkit-scrollbar-thumb:hover{background:#64748b}
 .status{padding:10px;border:1px dashed #e5e7eb;border-radius:10px;background:#fff;color:#374151;font-size:13px}
 .status-error{border-color:#fecaca;background:#fff1f2;color:#991b1b}
 .msg{display:flex;flex-direction:column;align-items:flex-start;gap:3px}

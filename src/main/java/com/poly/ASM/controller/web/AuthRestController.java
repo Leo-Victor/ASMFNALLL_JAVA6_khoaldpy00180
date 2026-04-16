@@ -163,6 +163,7 @@ public class AuthRestController {
                                 "fullname", account != null ? account.getFullname() : "",
                                 "photo", account != null ? account.getPhoto() : "",
                                 "email", account != null ? account.getEmail() : "",
+                                "accountType", account != null && isGoogleAccount(account) ? "GOOGLE" : "NORMAL",
                                 "roles", authentication.getAuthorities().stream().map(a -> a.getAuthority()).toList()
                         )
                 )
@@ -194,5 +195,22 @@ public class AuthRestController {
             );
         } catch (RuntimeException ignored) {
         }
+    }
+
+    private boolean isGoogleAccount(com.poly.ASM.entity.user.Account account) {
+        if (account == null) {
+            return false;
+        }
+        String phone = account.getPhone() == null ? "" : account.getPhone().trim();
+        String address = account.getAddress() == null ? "" : account.getAddress().trim();
+        String photo = account.getPhoto() == null ? "" : account.getPhoto().trim();
+        String email = account.getEmail() == null ? "" : account.getEmail().trim().toLowerCase();
+        String username = account.getUsername() == null ? "" : account.getUsername().trim().toLowerCase();
+        boolean defaultProfile = "0000000000".equals(phone) && "Chưa cập nhật".equalsIgnoreCase(address);
+        boolean hasRemotePhoto = photo.startsWith("http://") || photo.startsWith("https://");
+        String localPart = email.contains("@") ? email.substring(0, email.indexOf('@')) : email;
+        String normalized = localPart.replaceAll("[^a-z0-9._-]", "_").replaceAll("_+", "_");
+        boolean usernameMatchesGooglePattern = !normalized.isBlank() && (username.equals(normalized) || username.startsWith(normalized + "_"));
+        return defaultProfile && (hasRemotePhoto || usernameMatchesGooglePattern);
     }
 }

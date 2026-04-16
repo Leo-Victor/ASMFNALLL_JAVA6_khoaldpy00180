@@ -19,6 +19,8 @@ const lineDiscount = (item) => {
 const totalDiscount = computed(() => {
     return (state.items || []).reduce((sum, item) => sum + lineDiscount(item), 0);
 });
+const totalBeforeDiscount = computed(() => Number(state.totalPrice || 0) + Number(totalDiscount.value || 0));
+const payableTotal = computed(() => Number(totalBeforeDiscount.value || 0) - Number(totalDiscount.value || 0));
 const itemKey = (item) => item.productId + '-' + item.sizeId;
 const itemMaxStock = (item) => {
     const stock = Number(item?.stock || 0);
@@ -164,7 +166,7 @@ const openSellerChat = (item) => {
                                     </div>
                                 </td>
                                 <td>{{ money(item.price) }} VNĐ</td>
-                                <td>-{{ money(lineDiscount(item)) }} VNĐ</td>
+                                <td>{{ money(lineDiscount(item)) }} VNĐ</td>
                                 <td>
                                     <div class="cart-item-qty-form">
                                         <button
@@ -209,12 +211,16 @@ const openSellerChat = (item) => {
                 <div class="cart-summary">
                     <div class="cart-summary-content">
                         <div class="cart-summary-row">
-                            <span>Tổng giảm giá:</span>
-                            <strong>-{{ money(totalDiscount) }} VNĐ</strong>
+                            <span>Tổng:</span>
+                            <strong>{{ money(totalBeforeDiscount) }} VNĐ</strong>
                         </div>
                         <div class="cart-summary-row">
-                            <span>Tổng tiền:</span>
-                            <strong class="cart-total">{{ money(state.totalPrice) }} VNĐ</strong>
+                            <span>Giảm giá:</span>
+                            <strong>{{ money(totalDiscount) }} VNĐ</strong>
+                        </div>
+                        <div class="cart-summary-row">
+                            <span>Số tiền cần thanh toán:</span>
+                            <strong>{{ money(payableTotal) }} VNĐ</strong>
                         </div>
                     </div>
                     <div class="cart-summary-actions">

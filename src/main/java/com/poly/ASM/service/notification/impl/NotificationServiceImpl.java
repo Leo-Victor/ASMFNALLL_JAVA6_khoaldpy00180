@@ -108,6 +108,22 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    public void notifyRefundRequestForAdmins(Order order) {
+        if (order == null || order.getId() == null) {
+            return;
+        }
+        String title = "Yêu cầu hoàn tiền";
+        String content = "Đơn hàng #" + order.getId() + " vừa gửi yêu cầu hoàn tiền.";
+        List<Authority> admins = authorityRepository.findByRoleId("ADMIN");
+        for (Authority authority : admins) {
+            Account account = authority.getAccount();
+            if (account != null) {
+                createNotification(account, order, title, content);
+            }
+        }
+    }
+
+    @Override
     public long countUnread(String username) {
         return notificationRepository.countByAccountUsernameAndReadFalse(username);
     }

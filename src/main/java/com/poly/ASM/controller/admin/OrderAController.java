@@ -62,6 +62,7 @@ public class OrderAController {
                     item.put("expectedDeliveryDate", findOrderExpectedDeliveryDate(order.getId()).orElse(""));
                     item.put("deliveryDistanceM", findOrderDeliveryDistanceMeters(order.getId()).orElse(0L));
                     item.put("deliveredAt", findOrderDeliveredAt(order.getId()).orElse(null));
+                    item.put("refundDeclineReason", findRefundDeclineReason(order.getId()).orElse(""));
                     if (order.getAccount() != null) {
                         Map<String, Object> account = new HashMap<>();
                         account.put("username", order.getAccount().getUsername());
@@ -155,6 +156,57 @@ public class OrderAController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái đơn hàng thành công", Map.of("id", id, "status", status)));
     }
 
+    @PostMapping("/{id}/refund/approve")
+    @Transactional
+    public ResponseEntity<ApiResponse<?>> approveRefund(@PathVariable("id") Long id) {
+        ensureRefundRequestTable();
+        Integer pending = jdbcTemplate.queryForObject(
+                "select count(1) from dbo.order_refund_requests where order_id = ? and status = 'PENDING'",
+                Integer.class, id
+        );
+        if (pending == null || pending == 0) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Đơn hàng không ở trạng thái chờ hoàn tiền.", null));
+        }
+        notificationService.deleteByOrderId(id);
+        productReviewRepository.deleteByOrderId(id);
+        orderDetailService.deleteByOrderId(id);
+        orderService.deleteById(id);
+        jdbcTemplate.update("""
+                UPDATE dbo.order_refund_requests
+                SET status = 'SUCCESS', decline_reason = NULL, decided_at = GETDATE()
+                WHERE order_id = ?
+                """, id);
+        return ResponseEntity.ok(ApiResponse.success("Đã duyệt hoàn tiền và xoá đơn hàng.", Map.of("orderId", id, "status", "SUCCESS")));
+    }
+
+    @PostMapping("/{id}/refund/decline")
+    @Transactional
+    public ResponseEntity<ApiResponse<?>> declineRefund(@PathVariable("id") Long id,
+                                                        @RequestParam("reason") String reason) {
+        String safeReason = reason == null ? "" : reason.trim();
+        if (safeReason.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Vui lòng nhập lý do từ chối.", null));
+        }
+        ensureRefundRequestTable();
+        Integer pending = jdbcTemplate.queryForObject(
+                "select count(1) from dbo.order_refund_requests where order_id = ? and status = 'PENDING'",
+                Integer.class, id
+        );
+        if (pending == null || pending == 0) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Đơn hàng không ở trạng thái chờ hoàn tiền.", null));
+        }
+        jdbcTemplate.update("""
+                UPDATE dbo.order_refund_requests
+                SET status = 'DECLINED', decline_reason = ?, decided_at = GETDATE()
+                WHERE order_id = ?
+                """, safeReason, id);
+        orderService.findById(id).ifPresent(order -> {
+            order.setStatus("PLACED_PAID");
+            orderService.update(order);
+        });
+        return ResponseEntity.ok(ApiResponse.success("Đã từ chối yêu cầu hoàn tiền.", Map.of("orderId", id, "status", "DECLINED")));
+    }
+
     private boolean isValidTransition(String currentStatus, String nextStatus) {
         if (currentStatus == null || nextStatus == null || nextStatus.isBlank()) {
             return false;
@@ -166,7 +218,11 @@ public class OrderAController {
             return "SHIPPING_UNPAID".equals(nextStatus);
         }
         if ("PLACED_PAID".equals(currentStatus)) {
-            return "SHIPPING_PAID".equals(nextStatus);
+            return "SHIPPING_PAID".equals(nextStatus) || "REFUND_REQUEST".equals(nextStatus);
+        }
+        if ("REFUND_REQUEST".equals(currentStatus)) {
+            return "REFUND_REQUEST".equals(nextStatus)
+                    || "PLACED_PAID".equals(nextStatus);
         }
         if ("SHIPPING_UNPAID".equals(currentStatus) || "SHIPPING_PAID".equals(currentStatus)) {
             return "DELIVERED_SUCCESS".equals(nextStatus) || "DELIVERY_FAILED".equals(nextStatus);
@@ -275,8 +331,11 @@ public class OrderAController {
 
     private boolean isInTab(String status, String tab) {
         String current = status == null ? "" : status;
+        if ("refund".equals(tab)) {
+            return "REFUND_REQUEST".equals(current);
+        }
         if ("placed".equals(tab)) {
-            return "PLACED_UNPAID".equals(current) || "PLACED_PAID".equals(current);
+            return "PLACED_UNPAID".equals(current) || "PLACED_PAID".equals(current) || "REFUND_REQUEST".equals(current);
         }
         if ("delivered".equals(tab)) {
             return "DELIVERED_SUCCESS".equals(current) || "DONE".equals(current);
@@ -284,11 +343,48 @@ public class OrderAController {
         return "PENDING_PAYMENT".equals(current);
     }
 
+    private void ensureRefundRequestTable() {
+        try {
+            jdbcTemplate.execute("""
+                    IF OBJECT_ID('dbo.order_refund_requests', 'U') IS NULL
+                    BEGIN
+                        CREATE TABLE dbo.order_refund_requests (
+                            id BIGINT IDENTITY(1,1) PRIMARY KEY,
+                            order_id BIGINT NOT NULL,
+                            username VARCHAR(50) NOT NULL,
+                            status VARCHAR(30) NOT NULL,
+                            decline_reason NVARCHAR(MAX) NULL,
+                            created_at DATETIME NOT NULL DEFAULT GETDATE(),
+                            decided_at DATETIME NULL
+                        );
+                        CREATE UNIQUE INDEX idx_refund_order_unique ON dbo.order_refund_requests(order_id);
+                        CREATE INDEX idx_refund_username ON dbo.order_refund_requests(username);
+                        CREATE INDEX idx_refund_status ON dbo.order_refund_requests(status);
+                    END
+                    """);
+        } catch (Exception ignored) {
+        }
+    }
+
     private Optional<String> findOrderShippingPhone(Long orderId) {
         ensureOrderShippingPhoneColumn();
         try {
             String value = jdbcTemplate.queryForObject(
                     "select shipping_phone from dbo.orders where id = ?",
+                    String.class,
+                    orderId
+            );
+            return Optional.ofNullable(value);
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<String> findRefundDeclineReason(Long orderId) {
+        ensureRefundRequestTable();
+        try {
+            String value = jdbcTemplate.queryForObject(
+                    "select decline_reason from dbo.order_refund_requests where order_id = ?",
                     String.class,
                     orderId
             );

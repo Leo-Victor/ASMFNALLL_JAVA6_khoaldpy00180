@@ -59,6 +59,13 @@ const categoryBreakdown = computed(() => {
     return list.sort((a, b) => b.amount - a.amount);
 });
 const pieTotal = computed(() => categoryBreakdown.value.reduce((sum, item) => sum + item.amount, 0));
+const hoveredSliceName = ref("");
+const pieTooltip = reactive({
+    visible: false,
+    text: "",
+    x: 0,
+    y: 0
+});
 const pieSlices = computed(() => {
     const totalValue = pieTotal.value;
     if (!totalValue) {
@@ -128,7 +135,12 @@ const lineChart = computed(() => {
         y: height - 22,
         text: shouldShowLineLabel(index, circles.length) ? item.label : ""
     }));
-    return {points, circles, labels};
+    const yTicks = buildYAxisTicks(maxValue, 5).map((tick) => ({
+        value: tick,
+        y: paddingTop + (1 - tick / maxValue) * innerHeight
+    }));
+    const xAxisTitle = axisLabelByMode(viewMode.value);
+    return {points, circles, labels, yTicks, xAxisTitle};
 });
 const chartTitle = computed(() => {
     if (viewMode.value === "week") {
@@ -375,6 +387,40 @@ function describePieArc(cx, cy, r, startAngle, endAngle) {
     const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
     return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x} ${end.y} Z`;
 }
+function buildYAxisTicks(maxValue, steps = 5) {
+    const safeMax = Math.max(1, Number(maxValue || 0));
+    const list = [];
+    for (let i = 0; i <= steps; i++) {
+        list.push((safeMax / steps) * i);
+    }
+    return list;
+}
+function axisLabelByMode(mode) {
+    if (mode === "week" || mode === "month") {
+        return "Ngày";
+    }
+    if (mode === "quarter" || mode === "year") {
+        return "Tháng";
+    }
+    return "Thời gian";
+}
+function showPieTooltip(slice, event) {
+    hoveredSliceName.value = slice?.name || "";
+    pieTooltip.text = `${slice?.name || ""}: ${money(slice?.amount || 0)} VND (${((slice?.ratio || 0) * 100).toFixed(1)}%)`;
+    pieTooltip.visible = true;
+    movePieTooltip(event);
+}
+function movePieTooltip(event) {
+    if (!event) return;
+    const gap = 14;
+    pieTooltip.x = Number(event.clientX || 0) + gap;
+    pieTooltip.y = Number(event.clientY || 0) + gap;
+}
+function hidePieTooltip() {
+    hoveredSliceName.value = "";
+    pieTooltip.visible = false;
+    pieTooltip.text = "";
+}
 </script>
 
 <template>
@@ -483,16 +529,26 @@ function describePieArc(cx, cy, r, startAngle, endAngle) {
             <div v-if="error" class="status-message status-error">{{ error }}</div>
             <div class="revenue-chart-grid" v-if="!isSummaryMode">
                 <div class="card revenue-chart-card">
-                    <h4>Biểu đồ tròn doanh thu theo thể loại</h4>
+                    <h4>Tỷ lệ  % doanh thu theo thể loại</h4>
                     <div v-if="pieSlices.length" class="revenue-pie-wrap">
                         <svg viewBox="0 0 200 200" class="revenue-pie-chart">
-                            <path v-for="slice in pieSlices" :key="slice.name" :d="slice.path" :fill="slice.color"></path>
+                            <path
+                                v-for="slice in pieSlices"
+                                :key="slice.name"
+                                :d="slice.path"
+                                :fill="slice.color"
+                                :class="{active: hoveredSliceName === slice.name}"
+                                @mouseenter="showPieTooltip(slice, $event)"
+                                @mousemove="movePieTooltip($event)"
+                                @mouseleave="hidePieTooltip"
+                            />
                         </svg>
-                        <div class="revenue-legend">
-                            <div class="revenue-legend-item" v-for="slice in pieSlices" :key="`legend-${slice.name}`">
-                                <span class="revenue-legend-dot" :style="{background: slice.color}"></span>
-                                <span>{{ slice.name }}: {{ money(slice.amount) }} ({{ (slice.ratio * 100).toFixed(1) }}%)</span>
-                            </div>
+                        <div
+                            v-if="pieTooltip.visible"
+                            class="revenue-pie-tooltip"
+                            :style="{ left: `${pieTooltip.x}px`, top: `${pieTooltip.y}px` }"
+                        >
+                            {{ pieTooltip.text }}
                         </div>
                     </div>
                     <div v-else class="status-message">Chưa có dữ liệu doanh thu theo thể loại.</div>
@@ -503,11 +559,33 @@ function describePieArc(cx, cy, r, startAngle, endAngle) {
                         <svg viewBox="0 0 760 280" class="revenue-line-chart">
                             <line x1="56" y1="232" x2="736" y2="232" stroke="#d1d5db" stroke-width="1"></line>
                             <line x1="56" y1="24" x2="56" y2="232" stroke="#d1d5db" stroke-width="1"></line>
+                            <line
+                                v-for="(tick, index) in lineChart.yTicks"
+                                :key="'ytick-' + index"
+                                x1="56"
+                                :y1="tick.y"
+                                x2="736"
+                                :y2="tick.y"
+                                stroke="#f3f4f6"
+                                stroke-width="1"
+                            />
+                            <text
+                                v-for="(tick, index) in lineChart.yTicks"
+                                :key="'ylabel-' + index"
+                                x="48"
+                                :y="tick.y + 4"
+                                text-anchor="end"
+                                class="revenue-line-axis-value"
+                            >
+                                {{ money(tick.value) }}
+                            </text>
                             <polyline :points="lineChart.points" fill="none" stroke="#2563eb" stroke-width="3"></polyline>
                             <circle v-for="(point, index) in lineChart.circles" :key="`pt-${index}`" :cx="point.x" :cy="point.y" r="4" fill="#1d4ed8"></circle>
                             <text v-for="(item, index) in lineChart.labels" :key="`lb-${index}`" :x="item.x" :y="item.y" text-anchor="middle" class="revenue-line-label">
                                 {{ item.text }}
                             </text>
+                            <text x="396" y="274" text-anchor="middle" class="revenue-line-axis-title">{{ lineChart.xAxisTitle }}</text>
+                            <text x="16" y="136" text-anchor="middle" class="revenue-line-axis-title" transform="rotate(-90 16 136)">Doanh thu (VND)</text>
                         </svg>
                     </div>
                     <div v-else class="status-message">Chưa có dữ liệu chuỗi thời gian.</div>
@@ -616,5 +694,39 @@ function describePieArc(cx, cy, r, startAngle, endAngle) {
 
 .revenue-title {
     margin-top: 0;
+}
+
+.revenue-pie-chart path{
+    transition: opacity .2s ease, transform .2s ease;
+}
+.revenue-pie-chart path:hover,
+.revenue-pie-chart path.active{
+    opacity:.88;
+    transform-origin:100px 100px;
+    transform:scale(1.02);
+}
+.revenue-line-axis-value{
+    font-size:10px;
+    fill:#6b7280;
+}
+.revenue-line-axis-title{
+    font-size:12px;
+    font-weight:700;
+    fill:#374151;
+}
+.revenue-pie-tooltip{
+    position:fixed;
+    z-index:9999;
+    pointer-events:none;
+    max-width:320px;
+    padding:8px 10px;
+    border-radius:8px;
+    background:rgba(15,23,42,.92);
+    color:#fff;
+    border:1px solid rgba(148,163,184,.45);
+    font-size:12px;
+    font-weight:600;
+    line-height:1.35;
+    box-shadow:0 8px 24px rgba(0,0,0,.25);
 }
 </style>

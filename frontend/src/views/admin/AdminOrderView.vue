@@ -3,6 +3,7 @@ import {computed, nextTick, onMounted, onUnmounted, ref, watch} from "vue";
 import {useRoute} from "vue-router";
 import {AdminOrderPage} from "@/legacy/pages";
 import AdminNav from "@/components/AdminNav.vue";
+import {api} from "@/api";
 
 const {rows, selected, status, payosCode, msg, paging, load, toPrevPage, toNextPage, detail: fetchDetail, updateStatus: persistStatus, cancelPayos, remove} = AdminOrderPage.setup();
 const route = useRoute();
@@ -13,6 +14,10 @@ const actionMessage = ref("");
 const actionModalOpen = ref(false);
 const confirmModalOpen = ref(false);
 const confirmMessage = ref("");
+const declineModalOpen = ref(false);
+const declineReason = ref("");
+const declineTargetOrderId = ref(null);
+const decliningRefund = ref(false);
 const simulatingDelivery = ref(false);
 const activeTab = ref("pending");
 const hasValidDestination = ref(false);
@@ -33,7 +38,8 @@ const statusLabel = (value) => {
         SHIPPING_UNPAID: "Đang giao - Chưa TT",
         SHIPPING_PAID: "Đang giao - Đã TT",
         DELIVERED_SUCCESS: "Giao hàng thành công",
-        DELIVERY_FAILED: "Giao hàng thất bại"
+        DELIVERY_FAILED: "Giao hàng thất bại",
+        REFUND_REQUEST: "Yêu cầu hoàn tiền"
     };
     return labels[value] || value || "Không rõ";
 };
@@ -380,6 +386,54 @@ const confirmCancelOrder = async () => {
         updatingStatus.value = false;
     }
 };
+const approveRefund = async (id) => {
+    if (!id) return;
+    updatingStatus.value = true;
+    try {
+        await api.admin.orders.approveRefund(id);
+        await load(activeTab.value);
+        showActionModal("Đã duyệt hoàn tiền thành công.");
+    } catch (e) {
+        showActionModal(e.message || "Không thể duyệt hoàn tiền.");
+    } finally {
+        updatingStatus.value = false;
+    }
+};
+const openDeclineModal = (id) => {
+    if (!id) return;
+    declineTargetOrderId.value = id;
+    declineReason.value = "";
+    declineModalOpen.value = true;
+};
+const closeDeclineModal = () => {
+    if (decliningRefund.value) return;
+    declineModalOpen.value = false;
+    declineTargetOrderId.value = null;
+    declineReason.value = "";
+};
+const submitDeclineRefund = async () => {
+    const id = declineTargetOrderId.value;
+    const reason = String(declineReason.value || "").trim();
+    if (!id) {
+        closeDeclineModal();
+        return;
+    }
+    if (!reason) {
+        showActionModal("Vui lòng nhập lý do từ chối.");
+        return;
+    }
+    decliningRefund.value = true;
+    try {
+        await api.admin.orders.declineRefund(id, reason);
+        await load(activeTab.value);
+        closeDeclineModal();
+        showActionModal("Đã từ chối yêu cầu hoàn tiền.");
+    } catch (e) {
+        showActionModal(e.message || "Không thể từ chối hoàn tiền.");
+    } finally {
+        decliningRefund.value = false;
+    }
+};
 watch(activeTab, async (tab) => {
     await load(tab);
 });
@@ -429,6 +483,7 @@ onMounted(async () => {
                         <button class="order-tab-btn" :class="{active: activeTab === 'pending'}" type="button" @click="activeTab = 'pending'">Đơn chờ thanh toán</button>
                         <button class="order-tab-btn" :class="{active: activeTab === 'placed'}" type="button" @click="activeTab = 'placed'">Đơn đã đặt</button>
                         <button class="order-tab-btn" :class="{active: activeTab === 'delivered'}" type="button" @click="activeTab = 'delivered'">Đơn đã giao</button>
+                        <button class="order-tab-btn" :class="{active: activeTab === 'refund'}" type="button" @click="activeTab = 'refund'">Yêu cầu hoàn tiền</button>
                     </div>
                     <div class="table-actions" style="justify-content: space-between; margin-bottom: 10px;">
                         <span class="status-message" style="margin:0;">Trang {{ (currentPaging.page || 0) + 1 }} / {{ currentPaging.totalPages || 0 }} — Tổng {{ currentPaging.totalElements || 0 }} đơn</span>
@@ -445,6 +500,7 @@ onMounted(async () => {
                             <th>Trạng thái</th>
                             <th v-if="activeTab === 'placed'">Dự kiến nhận hàng</th>
                             <th v-if="activeTab === 'delivered'">Thời gian giao</th>
+                            <th v-if="activeTab === 'refund'">Lý do từ chối</th>
                             <th>Địa chỉ giao hàng</th>
                             <th v-if="activeTab !== 'pending'"></th>
                         </tr>
@@ -456,15 +512,20 @@ onMounted(async () => {
                             <td><span class="badge" :style="{color: statusColor(o.status)}">{{ statusLabel(o.status) }}</span></td>
                             <td v-if="activeTab === 'placed'">{{ formatExpectedDelivery(o) }}</td>
                             <td v-if="activeTab === 'delivered'">{{ formatDeliveredTime(o.deliveredAt) }}</td>
+                            <td v-if="activeTab === 'refund'">{{ o.refundDeclineReason || "-" }}</td>
                             <td>
                                 <div class="order-address-scroll">{{ o.address || "" }}</div>
                             </td>
                             <td class="table-actions" v-if="activeTab !== 'pending'">
                                 <button class="btn btn-action-outline" type="button" @click="openDetail(o.id)">Chi tiết</button>
+                                <template v-if="activeTab === 'refund'">
+                                    <button class="btn btn-outline-primary" type="button" @click="approveRefund(o.id)">Duyệt hoàn tiền</button>
+                                    <button class="btn btn-action-solid" type="button" @click="openDeclineModal(o.id)">Từ chối</button>
+                                </template>
                             </td>
                         </tr>
                         <tr v-if="!tabRows.length">
-                            <td :colspan="activeTab === 'pending' ? 5 : 6" class="order-empty-row">Không có đơn hàng trong mục này.</td>
+                            <td :colspan="activeTab === 'pending' ? 5 : 7" class="order-empty-row">Không có đơn hàng trong mục này.</td>
                         </tr>
                         </tbody>
                     </table>
@@ -541,6 +602,29 @@ onMounted(async () => {
                 <div class="status-message">{{ actionMessage }}</div>
                 <div class="admin-form-actions">
                     <button class="btn btn-primary" type="button" @click="closeActionModal">OK</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop" :class="{open: declineModalOpen}" v-if="declineModalOpen">
+            <div class="admin-modal-panel" style="max-width: 520px;">
+                <div class="modal-header">
+                    <h4>Từ chối hoàn tiền</h4>
+                    <button type="button" class="btn btn-outline-primary" @click="closeDeclineModal">Đóng</button>
+                </div>
+                <div class="form-group">
+                    <label>Lý do từ chối</label>
+                    <textarea
+                        v-model="declineReason"
+                        rows="4"
+                        placeholder="Nhập lý do để gửi cho khách hàng..."
+                        :disabled="decliningRefund"
+                    />
+                </div>
+                <div class="admin-form-actions">
+                    <button class="btn btn-action-solid" type="button" @click="submitDeclineRefund" :disabled="decliningRefund">
+                        {{ decliningRefund ? "Đang xử lý..." : "Xác nhận từ chối" }}
+                    </button>
+                    <button class="btn btn-outline-primary" type="button" @click="closeDeclineModal" :disabled="decliningRefund">Huỷ</button>
                 </div>
             </div>
         </div>

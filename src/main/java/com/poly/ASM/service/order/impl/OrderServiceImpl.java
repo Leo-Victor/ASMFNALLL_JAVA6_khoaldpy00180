@@ -60,11 +60,11 @@ public class OrderServiceImpl implements OrderService {
         String previousStatus = existingOpt.map(Order::getStatus).orElse(null);
         String nextStatus = order.getStatus();
         if (nextStatus != null && !nextStatus.equals(previousStatus)) {
-            boolean wasDelivered = isDeliveredStatus(previousStatus);
-            boolean nowDelivered = isDeliveredStatus(nextStatus);
-            if (!wasDelivered && nowDelivered) {
+            boolean hadReserved = hasReservedInventory(previousStatus);
+            boolean reserveNow = isPlacedStatus(nextStatus);
+            if (!hadReserved && reserveNow) {
                 adjustInventory(order.getId(), -1);
-            } else if (wasDelivered && !nowDelivered) {
+            } else if (!"DELIVERY_FAILED".equals(previousStatus) && "DELIVERY_FAILED".equals(nextStatus) && hadReserved) {
                 adjustInventory(order.getId(), 1);
             }
         }
@@ -72,15 +72,31 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional
+    public void reserveInventoryForOrder(Long orderId) {
+        adjustInventory(orderId, -1);
+    }
+
+    @Override
     public void deleteById(Long id) {
         orderRepository.deleteById(id);
     }
 
-    private boolean isDeliveredStatus(String status) {
+    private boolean isPlacedStatus(String status) {
+        return "PLACED_UNPAID".equals(status) || "PLACED_PAID".equals(status);
+    }
+
+    private boolean hasReservedInventory(String status) {
         if (status == null) {
             return false;
         }
-        return "DELIVERED_SUCCESS".equals(status) || "DONE".equals(status);
+        return "PLACED_UNPAID".equals(status)
+                || "PLACED_PAID".equals(status)
+                || "SHIPPING_UNPAID".equals(status)
+                || "SHIPPING_PAID".equals(status)
+                || "DELIVERED_SUCCESS".equals(status)
+                || "DONE".equals(status)
+                || "REFUND_REQUEST".equals(status);
     }
 
     private void adjustInventory(Long orderId, int direction) {
