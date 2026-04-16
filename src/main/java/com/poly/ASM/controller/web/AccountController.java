@@ -5,6 +5,7 @@ import com.poly.ASM.entity.user.Account;
 import com.poly.ASM.entity.user.Authority;
 import com.poly.ASM.entity.user.Role;
 import com.poly.ASM.service.auth.AuthService;
+import com.poly.ASM.service.auth.AuthProviderService;
 import com.poly.ASM.service.user.AccountService;
 import com.poly.ASM.service.user.AuthorityService;
 import com.poly.ASM.service.user.RoleService;
@@ -36,6 +37,7 @@ public class AccountController {
     private final RoleService roleService;
     private final AuthorityService authorityService;
     private final AuthService authService;
+    private final AuthProviderService authProviderService;
     private final PasswordEncoder passwordEncoder;
 
     @PostMapping("/sign-up")
@@ -88,7 +90,7 @@ public class AccountController {
         data.put("address", user.getAddress());
         data.put("photo", user.getPhoto());
         data.put("activated", user.getActivated());
-        data.put("accountType", isGoogleAccount(user) ? "GOOGLE" : "NORMAL");
+        data.put("accountType", authProviderService.isGoogleAccount(user) ? "GOOGLE" : "NORMAL");
         return ResponseEntity.ok(ApiResponse.success("Lấy hồ sơ người dùng thành công", data));
     }
 
@@ -105,6 +107,9 @@ public class AccountController {
         Optional<Account> byEmail = accountService.findByEmail(email);
         if (byEmail.isPresent() && !byEmail.get().getUsername().equals(user.getUsername())) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Email đã tồn tại", null));
+        }
+        if (authProviderService.isGoogleAccount(user) && email != null && !email.trim().equalsIgnoreCase(String.valueOf(user.getEmail()))) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Tài khoản Google không được phép thay đổi email.", null));
         }
         if (phone != null && !phone.isBlank()) {
             String normalizedPhone = phone.replaceAll("\\s+", "").trim();
@@ -161,7 +166,7 @@ public class AccountController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Vui lòng đăng nhập", null));
         }
-        if (isGoogleAccount(user)) {
+        if (authProviderService.isGoogleAccount(user)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Tài khoản Google không hỗ trợ đổi mật khẩu tại hệ thống.", null));
         }
         if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
@@ -213,20 +218,4 @@ public class AccountController {
         return !"0000000000".equals(phone);
     }
 
-    private boolean isGoogleAccount(Account account) {
-        if (account == null) {
-            return false;
-        }
-        String phone = account.getPhone() == null ? "" : account.getPhone().trim();
-        String address = account.getAddress() == null ? "" : account.getAddress().trim();
-        String photo = account.getPhoto() == null ? "" : account.getPhoto().trim();
-        String email = account.getEmail() == null ? "" : account.getEmail().trim().toLowerCase();
-        String username = account.getUsername() == null ? "" : account.getUsername().trim().toLowerCase();
-        boolean defaultProfile = "0000000000".equals(phone) && "Chưa cập nhật".equalsIgnoreCase(address);
-        boolean hasRemotePhoto = photo.startsWith("http://") || photo.startsWith("https://");
-        String localPart = email.contains("@") ? email.substring(0, email.indexOf('@')) : email;
-        String normalized = localPart.replaceAll("[^a-z0-9._-]", "_").replaceAll("_+", "_");
-        boolean usernameMatchesGooglePattern = !normalized.isBlank() && (username.equals(normalized) || username.startsWith(normalized + "_"));
-        return defaultProfile && (hasRemotePhoto || usernameMatchesGooglePattern);
-    }
 }

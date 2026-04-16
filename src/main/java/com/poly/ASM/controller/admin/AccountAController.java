@@ -9,6 +9,7 @@ import com.poly.ASM.service.user.AccountService;
 import com.poly.ASM.service.user.AuthorityService;
 import com.poly.ASM.service.user.RoleService;
 import com.poly.ASM.service.auth.AuthService;
+import com.poly.ASM.service.auth.AuthProviderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +43,7 @@ public class AccountAController {
     private final AuthorityService authorityService;
     private final PasswordEncoder passwordEncoder;
     private final AuthService authService;
+    private final AuthProviderService authProviderService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<?>> index() {
@@ -239,13 +241,7 @@ public class AccountAController {
     }
 
     private String resolveAccountType(Account account) {
-        String photo = account.getPhoto() == null ? "" : account.getPhoto().trim();
-        String phone = account.getPhone() == null ? "" : account.getPhone().trim();
-        String address = account.getAddress() == null ? "" : account.getAddress().trim();
-        boolean looksGoogle = (photo.startsWith("http://") || photo.startsWith("https://"))
-                && "0000000000".equals(phone)
-                && "Chưa cập nhật".equalsIgnoreCase(address);
-        return looksGoogle ? "GOOGLE" : "NORMAL";
+        return authProviderService.isGoogleAccount(account) ? "GOOGLE" : "NORMAL";
     }
 
     private String resolveRoleId(String username) {

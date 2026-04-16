@@ -5,6 +5,7 @@ import com.poly.ASM.entity.user.Authority;
 import com.poly.ASM.entity.user.Role;
 import com.poly.ASM.repository.user.AuthorityRepository;
 import com.poly.ASM.service.cart.CartService;
+import com.poly.ASM.service.auth.AuthProviderService;
 import com.poly.ASM.service.user.AccountService;
 import com.poly.ASM.service.user.AuthorityService;
 import com.poly.ASM.service.user.RoleService;
@@ -34,6 +35,7 @@ public class GoogleOAuth2LoginSuccessHandler extends SavedRequestAwareAuthentica
     private final AuthorityService authorityService;
     private final AuthorityRepository authorityRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuthProviderService authProviderService;
     private final CartService cartService;
     private final JwtService jwtService;
     private final TokenBlacklistService tokenBlacklistService;
@@ -53,6 +55,7 @@ public class GoogleOAuth2LoginSuccessHandler extends SavedRequestAwareAuthentica
 
         Account account = accountService.findByEmail(email)
                 .orElseGet(() -> createAccountFromGoogleProfile(oAuth2User, email));
+        authProviderService.markGoogle(account.getUsername());
         ensureUserRole(account);
         cartService.mergeSessionCartToUserCart(account.getUsername());
         UserDetails userDetails = customUserDetailsService.loadUserByUsername(account.getUsername());

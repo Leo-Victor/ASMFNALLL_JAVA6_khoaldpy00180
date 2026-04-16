@@ -51,7 +51,7 @@ const photoFileName = computed(() => form.photoFile?.name || "");
                     </div>
                     <div class="form-group">
                         <label>Email</label>
-                        <input type="email" v-model="form.email" required>
+                        <input type="email" v-model="form.email" :readonly="isGoogleAccount" required>
                     </div>
                     <div class="form-group">
                         <label>Số điện thoại</label>
