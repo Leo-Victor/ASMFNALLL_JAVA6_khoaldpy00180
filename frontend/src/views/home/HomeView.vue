@@ -1,9 +1,9 @@
 <script setup>
-import {HomePage} from "@/legacy/pages";
-import {ref, onMounted, onUnmounted, nextTick, watch} from "vue";
-import {useRoute, useRouter} from "vue-router";
+import { HomePage } from "@/legacy/pages";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
-const {filter, data, loading, error, load, productCard} = HomePage.setup();
+const { filter, data, loading, error, load } = HomePage.setup();
 const money = (value) => Number(value || 0).toLocaleString("vi-VN");
 const discountPercent = (product) => Math.max(0, Number(product?.discount || 0));
 const hasDiscount = (product) => discountPercent(product) > 0;
@@ -23,7 +23,6 @@ const normalizeSortValue = (value) => {
     return raw;
 };
 
-// Restore filter state from URL on mount
 onMounted(() => {
     if (route.query.keyword) filter.keyword = route.query.keyword;
     if (route.query.categoryId) filter.categoryId = route.query.categoryId;
@@ -32,34 +31,48 @@ onMounted(() => {
     load();
 });
 
-// Update URL when filter changes
 watch(filter, (newFilter) => {
     const query = {};
     if (newFilter.keyword) query.keyword = newFilter.keyword;
     if (newFilter.categoryId) query.categoryId = newFilter.categoryId;
     if (newFilter.sort) query.sort = normalizeSortValue(newFilter.sort);
     if (newFilter.page > 0) query.page = newFilter.page;
-    
+
     router.replace({ query }).catch(() => {});
 }, { deep: true });
 
 const resultsAnchor = ref(null);
-const scrollToResults = async () => {
+const headerOffset = 104;
+
+const scrollToElement = async (targetRef) => {
     await nextTick();
-    resultsAnchor.value?.scrollIntoView({behavior: "smooth", block: "start"});
+    const target = targetRef?.value;
+    if (!target) {
+        return;
+    }
+    const top = target.getBoundingClientRect().top + window.scrollY - headerOffset;
+    window.scrollTo({
+        top: Math.max(0, top),
+        behavior: "smooth"
+    });
 };
+
+const scrollToResults = async () => {
+    await scrollToElement(resultsAnchor);
+};
+
 const applySelectFilters = async () => {
     filter.page = 0;
     await load();
     await scrollToResults();
 };
+
 const applySearchFilters = async () => {
     filter.page = 0;
     await load();
     await scrollToResults();
 };
 
-// Carousel logic
 const currentSlide = ref(0);
 const carouselTrack = ref(null);
 let autoplayInterval = null;
@@ -80,12 +93,13 @@ const prevSlide = () => {
 };
 
 const updateCarousel = () => {
-    if (carouselTrack.value) {
-        const slides = carouselTrack.value.querySelectorAll('.carousel-slide');
-        slides.forEach((slide, index) => {
-            slide.classList.toggle('active', index === currentSlide.value);
-        });
+    if (!carouselTrack.value) {
+        return;
     }
+    const slides = carouselTrack.value.querySelectorAll(".carousel-slide");
+    slides.forEach((slide, index) => {
+        slide.classList.toggle("active", index === currentSlide.value);
+    });
 };
 
 const startAutoplay = () => {
@@ -112,14 +126,13 @@ onUnmounted(() => {
 <template>
     <main class="home-page">
         <div class="container">
-            <!-- Hero Carousel -->
             <div class="hero-carousel">
                 <div class="carousel-track" ref="carouselTrack">
                     <div class="carousel-slide active">
                         <div class="carousel-content">
                             <h1 class="carousel-title">Bộ sưu tập Xuân Hè 2026</h1>
                             <p class="carousel-subtitle">Khám phá phong cách mới, tự tin tỏa sáng</p>
-                            <router-link to="/product/list" class="btn btn-primary carousel-btn">Khám phá ngay</router-link>
+                            <a href="#new-products-section" class="btn btn-primary carousel-btn">Khám phá ngay</a>
                         </div>
                         <div class="carousel-images" v-if="data?.newProducts?.length >= 2">
                             <router-link :to="'/product/detail?id=' + data.newProducts[0].id" class="carousel-img-link">
@@ -129,13 +142,14 @@ onUnmounted(() => {
                                 <img :src="data.newProducts[1].image ? '/images/' + data.newProducts[1].image : '/images/product1.jpg'" class="slider-img" />
                             </router-link>
                         </div>
-                        <div class="carousel-bg" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+                        <div class="carousel-bg" style="background: linear-gradient(135deg, #dff7f2 0%, #cceeff 100%);"></div>
                     </div>
+
                     <div class="carousel-slide">
                         <div class="carousel-content">
                             <h1 class="carousel-title">Giảm giá đến 50%</h1>
                             <p class="carousel-subtitle">Săn sale ngay hôm nay</p>
-                            <router-link to="/product/list" class="btn btn-primary carousel-btn">Mua sắm</router-link>
+                            <a href="#discount-products-section" class="btn btn-primary carousel-btn">Mua sắm</a>
                         </div>
                         <div class="carousel-images" v-if="data?.discountProducts?.length >= 2">
                             <router-link :to="'/product/detail?id=' + data.discountProducts[0].id" class="carousel-img-link">
@@ -145,13 +159,14 @@ onUnmounted(() => {
                                 <img :src="data.discountProducts[1].image ? '/images/' + data.discountProducts[1].image : '/images/product1.jpg'" class="slider-img" />
                             </router-link>
                         </div>
-                        <div class="carousel-bg" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);"></div>
+                        <div class="carousel-bg" style="background: linear-gradient(135deg, #fff3cf 0%, #ffe2b8 100%);"></div>
                     </div>
+
                     <div class="carousel-slide">
                         <div class="carousel-content">
                             <h1 class="carousel-title">Sản phẩm bán chạy</h1>
                             <p class="carousel-subtitle">Phong cách sang trọng, đẳng cấp</p>
-                            <router-link to="/product/list" class="btn btn-primary carousel-btn">Xem thêm</router-link>
+                            <a href="#best-seller-section" class="btn btn-primary carousel-btn">Xem thêm</a>
                         </div>
                         <div class="carousel-images" v-if="data?.bestSellerProducts?.length >= 2">
                             <router-link :to="'/product/detail?id=' + data.bestSellerProducts[0].id" class="carousel-img-link">
@@ -161,18 +176,20 @@ onUnmounted(() => {
                                 <img :src="data.bestSellerProducts[1].image ? '/images/' + data.bestSellerProducts[1].image : '/images/product1.jpg'" class="slider-img" />
                             </router-link>
                         </div>
-                        <div class="carousel-bg" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);"></div>
+                        <div class="carousel-bg" style="background: linear-gradient(135deg, #ece7ff 0%, #d9efff 100%);"></div>
                     </div>
                 </div>
+
                 <button class="carousel-nav carousel-prev" @click="prevSlide">‹</button>
                 <button class="carousel-nav carousel-next" @click="nextSlide">›</button>
+
                 <div class="carousel-dots">
-                    <span class="dot" :class="{active: currentSlide === 0}" @click="goToSlide(0)"></span>
-                    <span class="dot" :class="{active: currentSlide === 1}" @click="goToSlide(1)"></span>
-                    <span class="dot" :class="{active: currentSlide === 2}" @click="goToSlide(2)"></span>
+                    <span class="dot" :class="{ active: currentSlide === 0 }" @click="goToSlide(0)"></span>
+                    <span class="dot" :class="{ active: currentSlide === 1 }" @click="goToSlide(1)"></span>
+                    <span class="dot" :class="{ active: currentSlide === 2 }" @click="goToSlide(2)"></span>
                 </div>
             </div>
-            
+
             <div class="home-filters">
                 <div class="filters-card">
                     <div class="filters-grid">
@@ -193,13 +210,14 @@ onUnmounted(() => {
 
             <div v-if="loading" class="status-message">Đang tải...</div>
             <div v-if="error" class="status-message status-error">{{ error }}</div>
-            
+
             <template v-if="data">
                 <div ref="resultsAnchor"></div>
+
                 <section class="home-section" v-if="(data.filteredProducts || []).length">
                     <h2 class="section-title">Kết quả tìm kiếm</h2>
                     <div class="product-grid" v-auto-grid>
-                        <div class="product-card" v-for="p in data.filteredProducts" :key="'f'+p.id">
+                        <div class="product-card" v-for="p in data.filteredProducts" :key="'f' + p.id">
                             <div class="product-card__image-wrapper">
                                 <router-link :to="'/product/detail?id=' + p.id">
                                     <img class="product-card__image" :src="p.image ? '/images/' + p.image : '/images/product1.jpg'" :alt="p.name">
@@ -223,14 +241,14 @@ onUnmounted(() => {
                     </div>
                 </section>
 
-                <section class="home-section">
+                <section id="new-products-section" class="home-section home-section--anchor">
                     <h2 class="section-title">
                         <span class="title-icon">✨</span>
                         Sản phẩm mới
                         <span class="title-icon">✨</span>
                     </h2>
                     <div class="product-grid" v-auto-grid>
-                        <div class="product-card" v-for="p in (data.newProducts||[])" :key="'n'+p.id">
+                        <div class="product-card" v-for="p in (data.newProducts || [])" :key="'n' + p.id">
                             <div class="product-card__image-wrapper">
                                 <router-link :to="'/product/detail?id=' + p.id">
                                     <img class="product-card__image" :src="p.image ? '/images/' + p.image : '/images/product1.jpg'" :alt="p.name">
@@ -253,14 +271,14 @@ onUnmounted(() => {
                     </div>
                 </section>
 
-                <section class="home-section">
+                <section id="discount-products-section" class="home-section home-section--anchor">
                     <h2 class="section-title">
                         <span class="title-icon">🔥</span>
                         Giảm giá đặc biệt
                         <span class="title-icon">🔥</span>
                     </h2>
                     <div class="product-grid" v-auto-grid>
-                        <div class="product-card" v-for="p in (data.discountProducts||[])" :key="'d'+p.id">
+                        <div class="product-card" v-for="p in (data.discountProducts || [])" :key="'d' + p.id">
                             <div class="product-card__image-wrapper">
                                 <router-link :to="'/product/detail?id=' + p.id">
                                     <img class="product-card__image" :src="p.image ? '/images/' + p.image : '/images/product1.jpg'" :alt="p.name">
@@ -283,14 +301,14 @@ onUnmounted(() => {
                     </div>
                 </section>
 
-                <section class="home-section">
+                <section id="best-seller-section" class="home-section home-section--anchor">
                     <h2 class="section-title">
                         <span class="title-icon">⭐</span>
                         Bán chạy nhất
                         <span class="title-icon">⭐</span>
                     </h2>
                     <div class="product-grid" v-auto-grid>
-                        <div class="product-card" v-for="p in (data.bestSellerProducts||[])" :key="'b'+p.id">
+                        <div class="product-card" v-for="p in (data.bestSellerProducts || [])" :key="'b' + p.id">
                             <div class="product-card__image-wrapper">
                                 <router-link :to="'/product/detail?id=' + p.id">
                                     <img class="product-card__image" :src="p.image ? '/images/' + p.image : '/images/product1.jpg'" :alt="p.name">
@@ -316,3 +334,9 @@ onUnmounted(() => {
         </div>
     </main>
 </template>
+
+<style scoped>
+.home-section--anchor {
+    scroll-margin-top: 120px;
+}
+</style>

@@ -249,6 +249,9 @@ const clearFilters = async () => {
     min-width: 130px;
     border-radius: 12px;
     font-weight: 700;
+    background: #fffdfc;
+    border-color: #d8e7ef;
+    color: #0f172a;
 }
 
 .page-link--nav:disabled {
@@ -261,9 +264,9 @@ const clearFilters = async () => {
 
 .page-link--indicator {
     border-radius: 12px;
-    background: #111827;
+    background: #1a1a1a;
     color: #fff;
-    border-color: #111827;
+    border-color: #1a1a1a;
     min-width: 160px;
     text-align: center;
     font-weight: 700;

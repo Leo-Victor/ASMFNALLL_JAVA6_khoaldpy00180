@@ -156,7 +156,7 @@ onUnmounted(() => {
         <nav class="navbar navbar-expand-lg">
             <div class="container">
                 <router-link class="navbar-brand" to="/home/index">
-                    <span class="brand-text">FASHION</span>
+                    <span class="brand-text">LEO</span>
                     <span class="brand-accent">STORE</span>
                 </router-link>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
@@ -166,8 +166,8 @@ onUnmounted(() => {
                     <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
                         <li class="nav-item"><router-link class="nav-link" to="/home/index">Trang chủ</router-link></li>
                         <li class="nav-item"><router-link class="nav-link" to="/product/list">Sản phẩm</router-link></li>
-                        <li class="nav-item"><router-link class="nav-link" to="/cart/index">Giỏ hàng</router-link></li>
-                        <li class="nav-item"><router-link class="nav-link" to="/order/order-list">Đơn hàng</router-link></li>
+                        <li class="nav-item" v-if="isAuthenticated"><router-link class="nav-link" to="/cart/index">Giỏ hàng</router-link></li>
+                        <li class="nav-item" v-if="isAuthenticated"><router-link class="nav-link" to="/order/order-list">Đơn hàng</router-link></li>
                         <li class="nav-item" v-if="isAdmin"><router-link class="nav-link" to="/admin/product">Quản trị</router-link></li>
                     </ul>
                     <div class="header-actions" v-if="!isAuthenticated">

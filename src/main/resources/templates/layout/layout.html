@@ -54,7 +54,7 @@
                     </div>
                 </div>
             </div>
-            <a th:href="@{/order/list}">Đơn hàng</a>
+            <a th:if="${session.USER != null}" th:href="@{/order/list}">Đơn hàng</a>
             <a th:if="${isAdmin}" th:href="@{/admin/category/index}">Quản trị</a>
             <a th:if="${session.USER == null}" th:href="@{/auth/login}">Đăng nhập</a>
             <a th:if="${session.USER == null}" th:href="@{/account/sign-up}">Đăng ký</a>
@@ -69,7 +69,7 @@
                 </svg>
             </button>
         </form>
-        <a class="cart-nav-link" th:href="@{/cart/index}" aria-label="Giỏ hàng">
+        <a class="cart-nav-link" th:if="${session.USER != null}" th:href="@{/cart/index}" aria-label="Giỏ hàng">
             <svg class="cart-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M7 4h-2l-1 2h2l3.6 7.59-1.35 2.44A2 2 0 0 0 9 19h9v-2H9.42a.25.25 0 0 1-.22-.37l.9-1.63h5.6a2 2 0 0 0 1.8-1.1l3.1-6.2A1 1 0 0 0 19.7 6H6.2l-.8-2zM7 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
             </svg>

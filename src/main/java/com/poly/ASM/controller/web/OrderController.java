@@ -1086,7 +1086,7 @@ public class OrderController {
         data.put("totalPrice", total);
         data.put("checkoutUrl", checkoutUrl);
         data.put("qrImageSrc", buildQrImageSrc(qrCode));
-        data.put("accountName", firstNonBlank(accountName, ""));
+        data.put("accountName", "LÊ ĐĂNG KHOA");
         data.put("accountNumber", firstNonBlank(accountNumber, ""));
         data.put("bankName", "BIDV");
         data.put("bankBin", bankBin);

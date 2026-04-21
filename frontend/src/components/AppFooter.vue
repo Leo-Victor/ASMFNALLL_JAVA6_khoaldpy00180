@@ -3,7 +3,7 @@
         <div class="container">
             <div class="footer-content">
                 <div class="footer-section">
-                    <h6 class="footer-title">FASHION STORE</h6>
+                    <h6 class="footer-title">LEOSTORE</h6>
                     <p class="footer-text">Thời trang hiện đại, phong cách riêng biệt.</p>
                 </div>
                 <div class="footer-section">
@@ -16,8 +16,8 @@
                 </div>
                 <div class="footer-section">
                     <h6 class="footer-title">Liên hệ</h6>
-                    <div class="footer-text">hotro@fashionstore.local</div>
-                    <div class="footer-copyright">© 2024 Fashion Store</div>
+                    <div class="footer-text">hotro@leostore.local</div>
+                    <div class="footer-copyright">© 2026 LEOSTORE</div>
                 </div>
             </div>
         </div>

@@ -12,9 +12,6 @@
         <router-link class="admin-nav-link" to="/admin/order">
             <span>Đơn hàng</span>
         </router-link>
-        <router-link class="admin-nav-link" to="/admin/camera">
-            <span>Camera</span>
-        </router-link>
         <router-link class="admin-nav-link" to="/admin/revenue">
             <span>Doanh thu</span>
         </router-link>
